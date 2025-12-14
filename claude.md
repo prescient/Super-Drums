@@ -18,9 +18,10 @@
 - **Files:** Prefix audio files with `DSP` (e.g., `DSPVoice.swift`) and UI files with `UI` (e.g., `UIMixer.swift`).
 
 ## Build Instructions
-- **Build:** `xcodebuild -scheme SuperDrums -destination 'id=F3C349E9-38A5-488C-9986-779F464DBC00' build`
-- **Test:** `xcodebuild test -scheme SuperDrums -destination 'id=F3C349E9-38A5-488C-9986-779F464DBC00'`
+- **Build:** `xcodebuild -scheme SuperDrums -destination 'id=376AFA1E-D4BC-4C3E-9077-2BE97125C73A' build`
+- **Test:** `xcodebuild test -scheme SuperDrums -destination 'id=376AFA1E-D4BC-4C3E-9077-2BE97125C73A'`
 - **Lint:** Ensure code compiles without warnings.
+- **Device:** iPad Pro 13-inch (M4)
 
 ---
 
@@ -69,6 +70,32 @@ test(model): add unit tests for Euclidean rhythm generator
 ---
 
 ## Testing Strategy
+
+### Core Philosophy
+
+**Untested code is broken code.** Every feature, fix, or refactor must include corresponding tests. Tests are not optional—they are a fundamental part of the implementation.
+
+### Test Coverage Requirements
+
+Every test file should cover:
+1. **Happy Path** - The expected, successful use case
+2. **Edge Cases** - Boundary conditions, empty states, maximum values
+3. **Error Cases** - Invalid inputs, failure scenarios, recovery behavior
+
+**Example Pattern:**
+```swift
+// Happy path
+func test_startAudioEngine_setsIsRunningTrue() { ... }
+
+// Edge case: called multiple times
+func test_startAudioEngine_calledMultipleTimes_doesNotCrash() { ... }
+
+// Edge case: stop without start
+func test_stopAudioEngine_withoutStart_doesNotCrash() { ... }
+
+// Error case: play before engine ready
+func test_play_withoutStartingEngine_setsIsPlayingTrue() { ... }
+```
 
 ### Test Pyramid
 
@@ -176,10 +203,10 @@ Before merging features, verify:
 ### Running Tests
 ```bash
 # Run all tests
-xcodebuild test -scheme SuperDrums -destination 'id=F3C349E9-38A5-488C-9986-779F464DBC00'
+xcodebuild test -scheme SuperDrums -destination 'id=376AFA1E-D4BC-4C3E-9077-2BE97125C73A'
 
 # Run specific test file
-xcodebuild test -scheme SuperDrums -destination 'id=F3C349E9-38A5-488C-9986-779F464DBC00' -only-testing:SuperDrumsTests/PatternTests
+xcodebuild test -scheme SuperDrums -destination 'id=376AFA1E-D4BC-4C3E-9077-2BE97125C73A' -only-testing:SuperDrumsTests/PatternTests
 ```
 
 ---

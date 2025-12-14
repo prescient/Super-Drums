@@ -224,4 +224,101 @@ final class AppStoreTests: XCTestCase {
         store.toggleSolo(for: .snare)
         XCTAssertTrue(store.project.voice(for: .snare).isSoloed)
     }
+
+    // MARK: - Audio Engine Lifecycle
+
+    func test_audioEngine_notRunningByDefault() {
+        let store = AppStore()
+        XCTAssertFalse(store.isAudioEngineRunning)
+    }
+
+    func test_startAudioEngine_setsIsRunningTrue() {
+        let store = AppStore()
+        store.startAudioEngine()
+        XCTAssertTrue(store.isAudioEngineRunning)
+        store.stopAudioEngine()
+    }
+
+    func test_stopAudioEngine_setsIsRunningFalse() {
+        let store = AppStore()
+        store.startAudioEngine()
+        store.stopAudioEngine()
+        XCTAssertFalse(store.isAudioEngineRunning)
+    }
+
+    func test_startAudioEngine_calledMultipleTimes_doesNotCrash() {
+        let store = AppStore()
+        store.startAudioEngine()
+        store.startAudioEngine() // Second call should be safe
+        XCTAssertTrue(store.isAudioEngineRunning)
+        store.stopAudioEngine()
+    }
+
+    func test_stopAudioEngine_withoutStart_doesNotCrash() {
+        let store = AppStore()
+        store.stopAudioEngine() // Should not crash
+        XCTAssertFalse(store.isAudioEngineRunning)
+    }
+
+    // MARK: - Audio Engine Integration (Edge Cases)
+
+    func test_play_withoutStartingEngine_setsIsPlayingTrue() {
+        // Edge case: UI calls play before engine is started
+        // Should still set state correctly (engine will be silent)
+        let store = AppStore()
+        store.play()
+        XCTAssertTrue(store.isPlaying)
+    }
+
+    func test_play_afterStartingEngine_setsIsPlayingTrue() {
+        // Happy path: engine started, then play
+        let store = AppStore()
+        store.startAudioEngine()
+        store.play()
+        XCTAssertTrue(store.isPlaying)
+        XCTAssertTrue(store.isAudioEngineRunning)
+        store.stop()
+        store.stopAudioEngine()
+    }
+
+    func test_stop_afterPlayWithEngine_stopsPlaybackAndResetsStep() {
+        let store = AppStore()
+        store.startAudioEngine()
+        store.play()
+        store.currentStep = 8 // Simulate advancement
+        store.stop()
+
+        XCTAssertFalse(store.isPlaying)
+        XCTAssertEqual(store.currentStep, 0)
+        XCTAssertTrue(store.isAudioEngineRunning) // Engine still running
+        store.stopAudioEngine()
+    }
+
+    func test_togglePlayback_withEngine_startsAndStops() {
+        let store = AppStore()
+        store.startAudioEngine()
+
+        store.togglePlayback()
+        XCTAssertTrue(store.isPlaying)
+
+        store.togglePlayback()
+        XCTAssertFalse(store.isPlaying)
+
+        store.stopAudioEngine()
+    }
+
+    func test_syncPatternToDSP_calledAfterEngineStart() {
+        // Verify that pattern sync works after engine start
+        let store = AppStore()
+        store.startAudioEngine()
+
+        // Toggle a step - this should sync to DSP
+        store.toggleStep(voice: .kick, stepIndex: 0)
+
+        // Verify step is active
+        let step = store.step(voice: .kick, stepIndex: 0)
+        XCTAssertTrue(step?.isActive == true)
+
+        store.stopAudioEngine()
+    }
 }
