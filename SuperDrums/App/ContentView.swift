@@ -17,6 +17,9 @@ struct ContentView: View {
         }
         .background(UIColors.background)
         .preferredColorScheme(.dark)
+        .onAppear {
+            store.startAudioEngine()
+        }
     }
 
     // MARK: - Tab Content
@@ -70,6 +73,9 @@ struct AUv3ContentView: View {
         }
         .background(UIColors.background)
         .preferredColorScheme(.dark)
+        .onAppear {
+            store.startAudioEngine()
+        }
     }
 
     @ViewBuilder
