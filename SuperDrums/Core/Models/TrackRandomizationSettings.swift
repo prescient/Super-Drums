@@ -180,6 +180,12 @@ extension TrackRandomizationSettings {
 
 /// Parameters that can be locked per-step
 enum LockableParameter: String, CaseIterable, Identifiable, Codable {
+    // Step parameters (stored directly on Step)
+    case velocity
+    case probability
+    case retrigger
+
+    // Synth parameters (stored in Step.parameterLocks)
     case pitch
     case decay
     case filterCutoff
@@ -191,8 +197,21 @@ enum LockableParameter: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// Whether this parameter is a step parameter (vs synth parameter lock)
+    var isStepParameter: Bool {
+        switch self {
+        case .velocity, .probability, .retrigger:
+            return true
+        default:
+            return false
+        }
+    }
+
     var displayName: String {
         switch self {
+        case .velocity: return "Velocity"
+        case .probability: return "Probability"
+        case .retrigger: return "Retrigger"
         case .pitch: return "Pitch"
         case .decay: return "Decay"
         case .filterCutoff: return "Filter"
@@ -206,6 +225,9 @@ enum LockableParameter: String, CaseIterable, Identifiable, Codable {
 
     var shortName: String {
         switch self {
+        case .velocity: return "VEL"
+        case .probability: return "PRB"
+        case .retrigger: return "RTG"
         case .pitch: return "PIT"
         case .decay: return "DCY"
         case .filterCutoff: return "FLT"

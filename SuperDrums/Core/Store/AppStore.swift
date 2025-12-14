@@ -161,7 +161,11 @@ final class AppStore {
     /// Current voice being edited
     var selectedVoice: Voice {
         get { project.voice(for: selectedVoiceType) }
-        set { project.setVoice(newValue, for: selectedVoiceType) }
+        set {
+            project.setVoice(newValue, for: selectedVoiceType)
+            // Sync to DSP engine so knob changes affect sound immediately
+            syncPatternToDSP()
+        }
     }
 
     /// BPM
@@ -532,7 +536,21 @@ final class AppStore {
     func setParameterLock(for voiceType: DrumVoiceType, stepIndex: Int, parameter: LockableParameter, value: Float) {
         guard var track = project.currentPattern.tracks[voiceType.rawValue],
               stepIndex < track.steps.count else { return }
-        track.steps[stepIndex].parameterLocks[parameter.rawValue] = value
+
+        // Handle step parameters vs synth parameter locks
+        switch parameter {
+        case .velocity:
+            track.steps[stepIndex].normalizedVelocity = value
+        case .probability:
+            track.steps[stepIndex].probability = max(0, min(1, value))
+        case .retrigger:
+            // Map 0-1 to 1-4 retriggers
+            let retriggers = Int(value * 3) + 1
+            track.steps[stepIndex].retriggerCount = max(1, min(4, retriggers))
+        default:
+            track.steps[stepIndex].parameterLocks[parameter.rawValue] = value
+        }
+
         project.currentPattern.tracks[voiceType.rawValue] = track
         syncPatternToDSP()
     }
@@ -541,7 +559,19 @@ final class AppStore {
     func clearParameterLock(for voiceType: DrumVoiceType, stepIndex: Int, parameter: LockableParameter) {
         guard var track = project.currentPattern.tracks[voiceType.rawValue],
               stepIndex < track.steps.count else { return }
-        track.steps[stepIndex].parameterLocks.removeValue(forKey: parameter.rawValue)
+
+        // Handle step parameters vs synth parameter locks
+        switch parameter {
+        case .velocity:
+            track.steps[stepIndex].velocity = 100 // Reset to default
+        case .probability:
+            track.steps[stepIndex].probability = 1.0 // Reset to 100%
+        case .retrigger:
+            track.steps[stepIndex].retriggerCount = 1 // Reset to single trigger
+        default:
+            track.steps[stepIndex].parameterLocks.removeValue(forKey: parameter.rawValue)
+        }
+
         project.currentPattern.tracks[voiceType.rawValue] = track
         syncPatternToDSP()
     }
@@ -549,9 +579,20 @@ final class AppStore {
     /// Clears all locks for a specific parameter across the track
     func clearParameterLocks(for voiceType: DrumVoiceType, parameter: LockableParameter) {
         guard var track = project.currentPattern.tracks[voiceType.rawValue] else { return }
+
         for i in 0..<track.steps.count {
-            track.steps[i].parameterLocks.removeValue(forKey: parameter.rawValue)
+            switch parameter {
+            case .velocity:
+                track.steps[i].velocity = 100
+            case .probability:
+                track.steps[i].probability = 1.0
+            case .retrigger:
+                track.steps[i].retriggerCount = 1
+            default:
+                track.steps[i].parameterLocks.removeValue(forKey: parameter.rawValue)
+            }
         }
+
         project.currentPattern.tracks[voiceType.rawValue] = track
         syncPatternToDSP()
     }

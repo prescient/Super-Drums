@@ -174,6 +174,9 @@ struct UIParameterLockEditor: View {
 
     private func parameterColor(_ param: LockableParameter) -> Color {
         switch param {
+        case .velocity: return UIColors.accentGreen
+        case .probability: return UIColors.accentYellow
+        case .retrigger: return UIColors.accentMagenta
         case .pitch: return UIColors.accentCyan
         case .decay: return UIColors.accentOrange
         case .filterCutoff: return UIColors.accentMagenta
@@ -202,19 +205,46 @@ struct ParameterLockBar: View {
 
     @State private var isDragging = false
 
-    /// Current value for this parameter lock (nil if not locked)
-    private var lockedValue: Float? {
-        step.parameterLocks[parameter.rawValue]
+    /// Current value for this parameter (handles both step params and p-locks)
+    private var currentValue: Float {
+        switch parameter {
+        case .velocity:
+            return step.normalizedVelocity
+        case .probability:
+            return step.probability
+        case .retrigger:
+            // Map 1-4 retriggers to 0-1 range
+            return Float(step.retriggerCount - 1) / 3.0
+        default:
+            return step.parameterLocks[parameter.rawValue] ?? 0.5
+        }
     }
 
-    /// Whether this step has a lock for the current parameter
+    /// Whether this step has a value set (for step params, always true if active)
     private var hasLock: Bool {
-        lockedValue != nil
+        if parameter.isStepParameter {
+            return step.isActive
+        }
+        return step.parameterLocks[parameter.rawValue] != nil
     }
 
     /// Display value (0-1)
     private var displayValue: Float {
-        lockedValue ?? 0.5
+        currentValue
+    }
+
+    /// Format the display value for the current parameter
+    private var formattedValue: String {
+        switch parameter {
+        case .velocity:
+            return "\(Int(currentValue * 127))"
+        case .probability:
+            return "\(Int(currentValue * 100))%"
+        case .retrigger:
+            return "\(step.retriggerCount)x"
+        default:
+            return String(format: "%.0f%%", currentValue * 100)
+        }
     }
 
     var body: some View {
