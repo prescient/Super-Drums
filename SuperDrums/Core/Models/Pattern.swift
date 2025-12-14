@@ -128,10 +128,11 @@ struct Track: Identifiable, Codable, Equatable {
         steps = .empty(count: stepCount)
     }
 
-    /// Shifts steps by offset (wraps around)
+    /// Shifts steps by offset (wraps around). Positive offset moves steps right.
     mutating func shift(by offset: Int) {
         guard stepCount > 0 else { return }
-        let normalizedOffset = ((offset % stepCount) + stepCount) % stepCount
+        // Negate offset so positive values shift right (steps move toward higher indices)
+        let normalizedOffset = (((-offset) % stepCount) + stepCount) % stepCount
         let rotated = Array(steps.suffix(stepCount - normalizedOffset) + steps.prefix(normalizedOffset))
         steps = rotated
     }

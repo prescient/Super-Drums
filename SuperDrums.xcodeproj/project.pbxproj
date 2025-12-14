@@ -49,10 +49,26 @@
 		F0000001025 /* DSPEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002025 /* DSPEngine.swift */; };
 		/* Assets */
 		F0000001026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F0000002026 /* Assets.xcassets */; };
+		/* Tests */
+		F0000001100 /* PatternTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002100 /* PatternTests.swift */; };
+		F0000001101 /* TrackRandomizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002101 /* TrackRandomizationTests.swift */; };
+		F0000001102 /* SongArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002102 /* SongArrangementTests.swift */; };
+		F0000001103 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002103 /* AppStoreTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		F000000B001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F0000009001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F0000006001;
+			remoteInfo = SuperDrums;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		F0000003001 /* SuperDrums.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SuperDrums.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000003002 /* SuperDrumsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuperDrumsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		/* App */
 		F0000002001 /* SuperDrumsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuperDrumsApp.swift; sourceTree = "<group>"; };
 		F0000002002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -95,10 +111,22 @@
 		F0000002025 /* DSPEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPEngine.swift; sourceTree = "<group>"; };
 		/* Assets */
 		F0000002026 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		/* Tests */
+		F0000002100 /* PatternTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternTests.swift; sourceTree = "<group>"; };
+		F0000002101 /* TrackRandomizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRandomizationTests.swift; sourceTree = "<group>"; };
+		F0000002102 /* SongArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongArrangementTests.swift; sourceTree = "<group>"; };
+		F0000002103 /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		F0000004001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0000004002 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -112,6 +140,7 @@
 			isa = PBXGroup;
 			children = (
 				F0000005002 /* SuperDrums */,
+				F0000005017 /* SuperDrumsTests */,
 				F0000005003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -132,6 +161,7 @@
 			isa = PBXGroup;
 			children = (
 				F0000003001 /* SuperDrums.app */,
+				F0000003002 /* SuperDrumsTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -266,6 +296,17 @@
 			path = Store;
 			sourceTree = "<group>";
 		};
+		F0000005017 /* SuperDrumsTests */ = {
+			isa = PBXGroup;
+			children = (
+				F0000002100 /* PatternTests.swift */,
+				F0000002101 /* TrackRandomizationTests.swift */,
+				F0000002102 /* SongArrangementTests.swift */,
+				F0000002103 /* AppStoreTests.swift */,
+			);
+			path = SuperDrumsTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -286,6 +327,24 @@
 			productReference = F0000003001 /* SuperDrums.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F0000006002 /* SuperDrumsTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F0000008003 /* Build configuration list for PBXNativeTarget "SuperDrumsTests" */;
+			buildPhases = (
+				F0000007003 /* Sources */,
+				F0000004002 /* Frameworks */,
+				F0000007004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F000000B002 /* PBXTargetDependency */,
+			);
+			name = SuperDrumsTests;
+			productName = SuperDrumsTests;
+			productReference = F0000003002 /* SuperDrumsTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -298,6 +357,10 @@
 				TargetAttributes = {
 					F0000006001 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					F0000006002 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = F0000006001;
 					};
 				};
 			};
@@ -315,6 +378,7 @@
 			projectRoot = "";
 			targets = (
 				F0000006001 /* SuperDrums */,
+				F0000006002 /* SuperDrumsTests */,
 			);
 		};
 /* End PBXProject section */
@@ -325,6 +389,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				F0000001026 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0000007004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,7 +439,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F0000007003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F0000001100 /* PatternTests.swift in Sources */,
+				F0000001101 /* TrackRandomizationTests.swift in Sources */,
+				F0000001102 /* SongArrangementTests.swift in Sources */,
+				F0000001103 /* AppStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F000000B002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F0000006001 /* SuperDrums */;
+			targetProxy = F000000B001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		F000000A001 /* Debug */ = {
@@ -556,6 +646,48 @@
 			};
 			name = Release;
 		};
+		F000000A005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.superdrums.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SuperDrums.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SuperDrums";
+			};
+			name = Debug;
+		};
+		F000000A006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.superdrums.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SuperDrums.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SuperDrums";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -573,6 +705,15 @@
 			buildConfigurations = (
 				F000000A001 /* Debug */,
 				F000000A002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F0000008003 /* Build configuration list for PBXNativeTarget "SuperDrumsTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F000000A005 /* Debug */,
+				F000000A006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
