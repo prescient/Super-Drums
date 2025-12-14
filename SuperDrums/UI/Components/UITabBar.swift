@@ -78,16 +78,17 @@ struct UITabBarItem: View {
 
 /// Transport controls (play/stop, BPM, etc.)
 struct UITransportBar: View {
-    @Binding var isPlaying: Bool
+    var isPlaying: Bool
     @Binding var bpm: Double
-    @Binding var currentStep: Int
+    var currentStep: Int
     var patternLength: Int = 16
+    var onPlayToggle: () -> Void
 
     var body: some View {
         HStack(spacing: UISpacing.lg) {
             // Play/Stop
             Button {
-                isPlaying.toggle()
+                onPlayToggle()
             } label: {
                 Image(systemName: isPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 24, weight: .semibold))
@@ -161,9 +162,10 @@ struct UITransportBar: View {
         Spacer()
 
         UITransportBar(
-            isPlaying: .constant(true),
+            isPlaying: true,
             bpm: .constant(120.0),
-            currentStep: .constant(4)
+            currentStep: 4,
+            onPlayToggle: {}
         )
 
         UITabBar(selectedTab: .constant(.sequencer))

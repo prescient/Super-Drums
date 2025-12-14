@@ -38,6 +38,22 @@ final class DSPEngine {
     /// Callback for voice trigger (for UI feedback)
     var onVoiceTriggered: ((DrumVoiceType, Float) -> Void)?
 
+    // MARK: - Debug Fallback Timer
+
+    /// Fallback timer for step advancement when audio callback isn't working
+    /// Set to true to use timer-based step advancement instead of audio-based
+    private static let useDebugTimer = true
+
+    /// Set to true to output a simple test tone instead of synth audio (for debugging)
+    private static let useTestTone = false
+    private static var testTonePhase: Float = 0
+
+    /// Timer for fallback step advancement
+    private var debugTimer: Timer?
+
+    /// Current step for timer-based advancement
+    private var timerStep: Int = 0
+
     // MARK: - Initialization
 
     init() {
@@ -59,11 +75,25 @@ final class DSPEngine {
             try session.setPreferredIOBufferDuration(0.005) // ~5ms latency
             try session.setActive(true)
             sampleRate = session.sampleRate
+
+            // Log audio session details
+            print("DSPEngine: Audio session active")
+            print("DSPEngine: Sample rate: \(session.sampleRate)")
+            print("DSPEngine: Output channels: \(session.outputNumberOfChannels)")
+            print("DSPEngine: Output volume: \(session.outputVolume)")
+            print("DSPEngine: Category: \(session.category.rawValue)")
+
+            // Log output route
+            let route = session.currentRoute
+            for output in route.outputs {
+                print("DSPEngine: Output port: \(output.portName) (\(output.portType.rawValue))")
+            }
         } catch {
             print("DSPEngine: Failed to setup audio session: \(error)")
         }
         #else
         sampleRate = 44100.0
+        print("DSPEngine: macOS mode - using default sample rate \(sampleRate)")
         #endif
     }
 
@@ -109,16 +139,26 @@ final class DSPEngine {
 
         guard let sequencerNode = sequencerNode else { return }
 
-        // Connect nodes
+        // Connect nodes: source -> mixer -> output
         engine.attach(sequencerNode)
         engine.connect(sequencerNode, to: engine.mainMixerNode, format: format)
+
+        // Explicitly connect main mixer to output (should be automatic, but let's be sure)
+        let outputFormat = engine.outputNode.inputFormat(forBus: 0)
+        engine.connect(engine.mainMixerNode, to: engine.outputNode, format: outputFormat)
+
+        // Ensure mixer volume is at full
+        engine.mainMixerNode.outputVolume = 1.0
+
+        print("DSPEngine: Output format: \(outputFormat)")
+        print("DSPEngine: Main mixer connected, volume=\(engine.mainMixerNode.outputVolume)")
 
         // Prepare and start
         engine.prepare()
         try engine.start()
         isRunning = true
 
-        print("DSPEngine: Started at \(sampleRate) Hz")
+        print("DSPEngine: Started at \(sampleRate) Hz, engine.isRunning=\(engine.isRunning)")
     }
 
     /// Stops the audio engine
@@ -140,6 +180,12 @@ final class DSPEngine {
         playbackState.currentStep = 0
         playbackState.samplePosition = 0
         playbackState.isPlaying = true
+        print("DSPEngine: startPlayback called - bpm=\(bpm), stepCount=\(stepCount), isPlaying=\(playbackState.isPlaying)")
+
+        // DEBUG: Start fallback timer for step advancement
+        if Self.useDebugTimer {
+            startDebugTimer(bpm: bpm, stepCount: stepCount)
+        }
     }
 
     /// Stop sequencer playback
@@ -147,6 +193,92 @@ final class DSPEngine {
         playbackState.isPlaying = false
         playbackState.currentStep = 0
         playbackState.samplePosition = 0
+
+        // DEBUG: Stop fallback timer
+        if Self.useDebugTimer {
+            stopDebugTimer()
+        }
+    }
+
+    // MARK: - Debug Timer Methods
+
+    /// Starts a fallback timer for step advancement (DEBUG ONLY)
+    private func startDebugTimer(bpm: Double, stepCount: Int) {
+        stopDebugTimer()
+        timerStep = 0
+
+        // Calculate interval between steps: (60 / BPM) / 4 for 16th notes
+        let secondsPerBeat = 60.0 / bpm
+        let secondsPerStep = secondsPerBeat / 4.0
+
+        print("DSPEngine DEBUG TIMER: Starting with interval=\(secondsPerStep)s, stepCount=\(stepCount)")
+
+        debugTimer = Timer.scheduledTimer(withTimeInterval: secondsPerStep, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+
+                // Advance step
+                self.timerStep = (self.timerStep + 1) % stepCount
+                print("DSPEngine DEBUG TIMER: Step \(self.timerStep)")
+
+                // Call the callback
+                self.onStepAdvanced?(self.timerStep)
+
+                // Trigger voices for this step
+                self.triggerVoicesForStep(self.timerStep)
+            }
+        }
+
+        // Fire immediately for step 0
+        onStepAdvanced?(0)
+        triggerVoicesForStep(0)
+    }
+
+    /// Stops the debug timer
+    private func stopDebugTimer() {
+        debugTimer?.invalidate()
+        debugTimer = nil
+        timerStep = 0
+        print("DSPEngine DEBUG TIMER: Stopped")
+    }
+
+    /// Triggers voices for a step (called by debug timer)
+    private func triggerVoicesForStep(_ step: Int) {
+        let patternData = playbackState.patternData
+
+        // DEBUG: Log pattern data status
+        if step == 0 {
+            print("DSPEngine DEBUG: patternData has \(patternData.count) voices")
+            for (i, voiceSteps) in patternData.enumerated() {
+                let activeCount = voiceSteps.filter { $0.isActive }.count
+                if activeCount > 0 {
+                    print("DSPEngine DEBUG: Voice \(i) has \(activeCount) active steps out of \(voiceSteps.count)")
+                }
+            }
+        }
+
+        for (voiceIndex, voiceSteps) in patternData.enumerated() {
+            guard step < voiceSteps.count else { continue }
+
+            let stepData = voiceSteps[step]
+            guard stepData.isActive else { continue }
+
+            // Check probability
+            if stepData.probability < 1.0 {
+                let random = Float.random(in: 0...1)
+                if random > stepData.probability {
+                    continue
+                }
+            }
+
+            // Trigger the voice
+            voiceSynths[voiceIndex].trigger(velocity: stepData.velocity)
+            print("DSPEngine DEBUG TIMER: Triggered voice \(voiceIndex) at step \(step) with velocity \(stepData.velocity)")
+
+            // Notify UI
+            let voiceType = DrumVoiceType.allCases[voiceIndex]
+            onVoiceTriggered?(voiceType, stepData.velocity)
+        }
     }
 
     /// Update BPM during playback
@@ -203,6 +335,10 @@ final class DSPEngine {
 
     // MARK: - Audio Render (Audio Thread - Static)
 
+    // Debug counter for render callback tracing
+    private static var renderCallCount: Int = 0
+    private static var lastDebugPrintTime: Double = 0
+
     /// Main render callback - runs on audio thread
     /// MUST be lock-free and real-time safe
     private static func renderAudio(
@@ -216,12 +352,50 @@ final class DSPEngine {
     ) -> OSStatus {
         let ablPointer = UnsafeMutableAudioBufferListPointer(audioBufferList)
 
-        guard ablPointer.count >= 2 else { return noErr }
+        // DEBUG: Log buffer info once at startup
+        if renderCallCount == 0 {
+            print("DSPEngine RENDER: Buffer count=\(ablPointer.count), frameCount=\(frameCount)")
+            for (i, buf) in ablPointer.enumerated() {
+                print("DSPEngine RENDER: Buffer[\(i)] channels=\(buf.mNumberChannels) bytes=\(buf.mDataByteSize)")
+            }
+        }
+
+        guard ablPointer.count >= 2 else {
+            // Fallback: Try interleaved format if only 1 buffer
+            if ablPointer.count == 1 {
+                let interleavedBuffer = ablPointer[0].mData?.assumingMemoryBound(to: Float.self)
+                guard let buffer = interleavedBuffer else { return noErr }
+                let numChannels = Int(ablPointer[0].mNumberChannels)
+                if renderCallCount == 0 {
+                    print("DSPEngine RENDER: Using interleaved format with \(numChannels) channels")
+                }
+                // Handle interleaved format (silence for now, but log it)
+                for i in 0..<Int(frameCount) * numChannels {
+                    buffer[i] = 0
+                }
+            }
+            return noErr
+        }
 
         let leftBuffer = ablPointer[0].mData?.assumingMemoryBound(to: Float.self)
         let rightBuffer = ablPointer[1].mData?.assumingMemoryBound(to: Float.self)
 
         guard let left = leftBuffer, let right = rightBuffer else { return noErr }
+
+        // If test tone mode, output a simple sine wave and return
+        if useTestTone {
+            for i in 0..<Int(frameCount) {
+                let sample = sinf(testTonePhase * 2.0 * .pi) * 0.3
+                left[i] = sample
+                right[i] = sample
+                testTonePhase += 440.0 / Float(sampleRate) // 440 Hz test tone
+                if testTonePhase >= 1.0 { testTonePhase -= 1.0 }
+            }
+            if renderCallCount % 86 == 0 {
+                print("DSPEngine TEST TONE: Outputting 440Hz sine wave")
+            }
+            return noErr
+        }
 
         // Clear buffers
         for i in 0..<Int(frameCount) {
@@ -233,6 +407,12 @@ final class DSPEngine {
         let isPlaying = state.isPlaying
         let bpm = state.bpm
         let stepCount = state.stepCount
+
+        // DEBUG: Log render callback status periodically (every ~1 second)
+        renderCallCount += 1
+        if renderCallCount % 86 == 0 { // ~1 second at 512 samples/buffer, 44100 Hz
+            print("DSPEngine RENDER: isPlaying=\(isPlaying), bpm=\(bpm), stepCount=\(stepCount), samplePos=\(state.samplePosition), currentStep=\(state.currentStep)")
+        }
 
         // Calculate samples per step (16th note)
         // At 120 BPM: 60/120 = 0.5 sec per beat, /4 = 0.125 sec per 16th
@@ -256,6 +436,9 @@ final class DSPEngine {
                 if currentStepIndex != previousStepIndex {
                     state.currentStep = currentStepIndex
 
+                    // DEBUG: Log step changes
+                    print("DSPEngine STEP CHANGE: \(previousStepIndex) -> \(currentStepIndex)")
+
                     // Trigger voices for this step
                     triggerStepVoices(
                         state: state,
@@ -274,6 +457,7 @@ final class DSPEngine {
             // Render all voice synths (even when not playing, to finish decaying sounds)
             var leftSample: Float = 0
             var rightSample: Float = 0
+            var maxSample: Float = 0
 
             for (voiceIndex, synth) in synths.enumerated() {
                 // Check mute/solo
@@ -294,12 +478,18 @@ final class DSPEngine {
 
                     leftSample += sample * leftGain
                     rightSample += sample * rightGain
+                    maxSample = max(maxSample, abs(sample))
                 }
             }
 
             // Soft clip to prevent harsh distortion
             left[frameIndex] = softClip(leftSample)
             right[frameIndex] = softClip(rightSample)
+
+            // DEBUG: Log if we're producing audio (once per buffer)
+            if frameIndex == 0 && maxSample > 0.001 {
+                print("DSPEngine RENDER: Producing audio! maxSample=\(maxSample)")
+            }
         }
 
         state.samplePosition = currentSample

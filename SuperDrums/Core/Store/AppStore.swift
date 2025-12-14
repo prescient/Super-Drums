@@ -79,9 +79,17 @@ final class AppStore {
     /// Sets up callbacks from DSP engine
     private func setupAudioCallbacks() {
         // Handle step advancement from audio thread
+        // Note: This closure is called from DispatchQueue.main.async in DSPEngine
         dspEngine.onStepAdvanced = { [weak self] step in
-            guard let self = self else { return }
-            self.handleStepAdvanced(step)
+            print("AppStore: onStepAdvanced callback received step=\(step)")
+            guard let self = self else {
+                print("AppStore: onStepAdvanced - self was nil!")
+                return
+            }
+            // Use MainActor.assumeIsolated since we're called from DispatchQueue.main.async
+            MainActor.assumeIsolated {
+                self.handleStepAdvanced(step)
+            }
         }
 
         // Handle voice triggers for UI feedback
@@ -96,6 +104,7 @@ final class AppStore {
     /// Called when the audio engine advances to a new step
     private func handleStepAdvanced(_ newStep: Int) {
         let previousStep = currentStep
+        print("AppStore: handleStepAdvanced - updating currentStep from \(previousStep) to \(newStep)")
         currentStep = newStep
 
         // Check for pattern wrap (step 0 after step 15)
@@ -108,8 +117,10 @@ final class AppStore {
 
     /// Starts the audio engine (call on app launch)
     func startAudioEngine() {
+        print("AppStore: startAudioEngine() called")
         do {
             try dspEngine.start()
+            print("AppStore: startAudioEngine() - engine started successfully, isRunning=\(dspEngine.isRunning)")
             syncPatternToDSP()
         } catch {
             print("AppStore: Failed to start audio engine: \(error)")
@@ -123,6 +134,19 @@ final class AppStore {
 
     /// Syncs current pattern and voice data to DSP engine
     func syncPatternToDSP() {
+        // DEBUG: Log pattern data being synced
+        var activeStepCount = 0
+        for voiceType in DrumVoiceType.allCases {
+            if let track = currentPattern.tracks[voiceType.rawValue] {
+                let activeSteps = track.steps.filter { $0.isActive }.count
+                activeStepCount += activeSteps
+                if activeSteps > 0 {
+                    print("AppStore: syncPatternToDSP - \(voiceType): \(activeSteps) active steps")
+                }
+            }
+        }
+        print("AppStore: syncPatternToDSP - Total active steps: \(activeStepCount)")
+
         dspEngine.updatePattern(currentPattern, voices: project.voices)
     }
 
@@ -162,10 +186,15 @@ final class AppStore {
 
     /// Starts playback
     func play() {
-        guard !isPlaying else { return }
+        guard !isPlaying else {
+            print("AppStore: play() called but already playing")
+            return
+        }
+        print("AppStore: play() - starting playback, isAudioEngineRunning=\(isAudioEngineRunning)")
         isPlaying = true
         syncPatternToDSP()
         dspEngine.startPlayback(bpm: bpm, stepCount: currentPattern.defaultStepCount)
+        print("AppStore: play() - playback started")
     }
 
     /// Stops playback

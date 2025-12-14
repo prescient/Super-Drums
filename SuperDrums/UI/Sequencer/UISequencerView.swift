@@ -40,10 +40,11 @@ struct UISequencerView: View {
                 VStack(spacing: 0) {
                     // Transport bar
                     UITransportBar(
-                        isPlaying: $store.isPlaying,
+                        isPlaying: store.isPlaying,
                         bpm: $store.bpm,
-                        currentStep: $store.currentStep,
-                        patternLength: store.currentPattern.defaultStepCount
+                        currentStep: store.currentStep,
+                        patternLength: store.currentPattern.defaultStepCount,
+                        onPlayToggle: { store.togglePlayback() }
                     )
                     .frame(height: transportHeight)
 
