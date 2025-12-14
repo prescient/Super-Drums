@@ -1,6 +1,7 @@
 import XCTest
 @testable import SuperDrums
 
+@MainActor
 final class AppStoreTests: XCTestCase {
 
     // MARK: - Transport

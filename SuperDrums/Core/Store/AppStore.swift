@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Central state management for the app using the Observation framework.
 @Observable
+@MainActor
 final class AppStore {
 
     // MARK: - Project State
@@ -21,6 +22,14 @@ final class AppStore {
 
     /// Current tab
     var selectedTab: AppTab = .sequencer
+
+    // MARK: - Audio Engine
+
+    /// The DSP engine for audio playback
+    private let dspEngine: DSPEngine
+
+    /// Whether audio engine is running
+    var isAudioEngineRunning: Bool { dspEngine.isRunning }
 
     // MARK: - UI State
 
@@ -61,8 +70,60 @@ final class AppStore {
 
     // MARK: - Initialization
 
-    init(project: Project = Project()) {
+    init(project: Project = Project(), dspEngine: DSPEngine? = nil) {
         self.project = project
+        self.dspEngine = dspEngine ?? DSPEngine()
+        setupAudioCallbacks()
+    }
+
+    /// Sets up callbacks from DSP engine
+    private func setupAudioCallbacks() {
+        // Handle step advancement from audio thread
+        dspEngine.onStepAdvanced = { [weak self] step in
+            guard let self = self else { return }
+            self.handleStepAdvanced(step)
+        }
+
+        // Handle voice triggers for UI feedback
+        dspEngine.onVoiceTriggered = { [weak self] voiceType, velocity in
+            // Could update UI indicators here
+            _ = self
+            _ = voiceType
+            _ = velocity
+        }
+    }
+
+    /// Called when the audio engine advances to a new step
+    private func handleStepAdvanced(_ newStep: Int) {
+        let previousStep = currentStep
+        currentStep = newStep
+
+        // Check for pattern wrap (step 0 after step 15)
+        if newStep == 0 && previousStep > 0 {
+            if isSongMode {
+                advanceSongPosition()
+            }
+        }
+    }
+
+    /// Starts the audio engine (call on app launch)
+    func startAudioEngine() {
+        do {
+            try dspEngine.start()
+            syncPatternToDSP()
+        } catch {
+            print("AppStore: Failed to start audio engine: \(error)")
+        }
+    }
+
+    /// Stops the audio engine
+    func stopAudioEngine() {
+        dspEngine.stop()
+    }
+
+    /// Syncs current pattern and voice data to DSP engine
+    func syncPatternToDSP() {
+        dspEngine.updatePattern(currentPattern, voices: project.voices)
     }
 
     // MARK: - Computed Properties
@@ -82,25 +143,35 @@ final class AppStore {
     /// BPM
     var bpm: Double {
         get { project.bpm }
-        set { project.bpm = max(30, min(300, newValue)) }
+        set {
+            project.bpm = max(30, min(300, newValue))
+            dspEngine.setBPM(project.bpm)
+        }
     }
 
     /// Swing
     var swing: Float {
         get { project.swing }
-        set { project.swing = max(0.5, min(0.75, newValue)) }
+        set {
+            project.swing = max(0.5, min(0.75, newValue))
+            dspEngine.setSwing(project.swing)
+        }
     }
 
     // MARK: - Transport Controls
 
     /// Starts playback
     func play() {
+        guard !isPlaying else { return }
         isPlaying = true
+        syncPatternToDSP()
+        dspEngine.startPlayback(bpm: bpm, stepCount: currentPattern.defaultStepCount)
     }
 
     /// Stops playback
     func stop() {
         isPlaying = false
+        dspEngine.stopPlayback()
         currentStep = 0
         currentSongPosition = 0
         currentPatternLoopCount = 0
@@ -115,7 +186,7 @@ final class AppStore {
         }
     }
 
-    /// Advances to next step (called by audio engine)
+    /// Advances to next step (called by audio engine callback - no longer used directly)
     func advanceStep() {
         let stepCount = currentPattern.defaultStepCount
         let nextStep = currentStep + 1
@@ -161,6 +232,7 @@ final class AppStore {
         // Update current pattern to match song position
         if let entry = currentSongEntry {
             project.currentPatternIndex = entry.patternIndex
+            syncPatternToDSP()
         }
     }
 
@@ -180,11 +252,13 @@ final class AppStore {
     /// Toggles a step in the current pattern
     func toggleStep(voice: DrumVoiceType, stepIndex: Int) {
         project.currentPattern.toggleStep(voice: voice, stepIndex: stepIndex)
+        syncPatternToDSP()
     }
 
     /// Sets velocity for a step
     func setStepVelocity(voice: DrumVoiceType, stepIndex: Int, velocity: UInt8) {
         project.currentPattern.setStepVelocity(voice: voice, stepIndex: stepIndex, velocity: velocity)
+        syncPatternToDSP()
     }
 
     /// Gets step at position
@@ -195,11 +269,13 @@ final class AppStore {
     /// Clears current pattern
     func clearCurrentPattern() {
         project.currentPattern.clear()
+        syncPatternToDSP()
     }
 
     /// Shifts current pattern
     func shiftPattern(by offset: Int) {
         project.currentPattern.shift(by: offset)
+        syncPatternToDSP()
     }
 
     // MARK: - Voice Controls
@@ -209,6 +285,7 @@ final class AppStore {
         var voice = project.voice(for: voiceType)
         voice.isMuted = muted
         project.setVoice(voice, for: voiceType)
+        syncPatternToDSP()
     }
 
     /// Toggles mute for a voice
@@ -222,6 +299,7 @@ final class AppStore {
         var voice = project.voice(for: voiceType)
         voice.isSoloed = soloed
         project.setVoice(voice, for: voiceType)
+        syncPatternToDSP()
     }
 
     /// Toggles solo for a voice
@@ -235,6 +313,7 @@ final class AppStore {
         var voice = project.voice(for: voiceType)
         voice.volume = max(0, min(1, volume))
         project.setVoice(voice, for: voiceType)
+        syncPatternToDSP()
     }
 
     /// Sets pan for a voice
@@ -242,6 +321,7 @@ final class AppStore {
         var voice = project.voice(for: voiceType)
         voice.pan = max(-1, min(1, pan))
         project.setVoice(voice, for: voiceType)
+        syncPatternToDSP()
     }
 
     // MARK: - Pattern Management
@@ -250,6 +330,7 @@ final class AppStore {
     func selectPattern(_ index: Int) {
         guard index < project.patterns.count else { return }
         project.currentPatternIndex = index
+        syncPatternToDSP()
     }
 
     /// Adds a new pattern
@@ -289,6 +370,7 @@ final class AppStore {
             track.randomize(density: effectiveDensity)
             project.currentPattern.tracks[voiceType.rawValue] = track
         }
+        syncPatternToDSP()
     }
 
     /// Randomizes sound design for selected voice
@@ -301,6 +383,7 @@ final class AppStore {
         voice.drive = Float.random(in: 0...0.5)
 
         project.setVoice(voice, for: voiceType)
+        syncPatternToDSP()
     }
 
     // MARK: - Per-Track Operations
@@ -368,6 +451,7 @@ final class AppStore {
         }
 
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Clears a single track
@@ -375,6 +459,7 @@ final class AppStore {
         guard var track = project.currentPattern.tracks[voiceType.rawValue] else { return }
         track.clear()
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Fills all steps in a track
@@ -385,6 +470,7 @@ final class AppStore {
             track.steps[i].velocity = 100
         }
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Shifts a single track
@@ -392,6 +478,7 @@ final class AppStore {
         guard var track = project.currentPattern.tracks[voiceType.rawValue] else { return }
         track.shift(by: offset)
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Reverses a single track
@@ -399,6 +486,7 @@ final class AppStore {
         guard var track = project.currentPattern.tracks[voiceType.rawValue] else { return }
         track.steps.reverse()
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Sets step count for a track (polymetric mode)
@@ -406,6 +494,7 @@ final class AppStore {
         guard var track = project.currentPattern.tracks[voiceType.rawValue] else { return }
         track.setStepCount(count)
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     // MARK: - Parameter Locks
@@ -416,6 +505,7 @@ final class AppStore {
               stepIndex < track.steps.count else { return }
         track.steps[stepIndex].parameterLocks[parameter.rawValue] = value
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Clears a parameter lock for a specific step
@@ -424,6 +514,7 @@ final class AppStore {
               stepIndex < track.steps.count else { return }
         track.steps[stepIndex].parameterLocks.removeValue(forKey: parameter.rawValue)
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Clears all locks for a specific parameter across the track
@@ -433,6 +524,7 @@ final class AppStore {
             track.steps[i].parameterLocks.removeValue(forKey: parameter.rawValue)
         }
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Clears all parameter locks for a track
@@ -442,6 +534,7 @@ final class AppStore {
             track.steps[i].parameterLocks.removeAll()
         }
         project.currentPattern.tracks[voiceType.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Sets probability for a specific step
@@ -450,6 +543,7 @@ final class AppStore {
               stepIndex < track.steps.count else { return }
         track.steps[stepIndex].probability = max(0, min(1, probability))
         project.currentPattern.tracks[voice.rawValue] = track
+        syncPatternToDSP()
     }
 
     /// Sets retrigger count for a specific step
@@ -458,6 +552,7 @@ final class AppStore {
               stepIndex < track.steps.count else { return }
         track.steps[stepIndex].retriggerCount = max(1, min(8, count))
         project.currentPattern.tracks[voice.rawValue] = track
+        syncPatternToDSP()
     }
 
     // MARK: - Song Arrangement
@@ -511,6 +606,7 @@ final class AppStore {
         currentStep = 0
         if let entry = currentSongEntry {
             project.currentPatternIndex = entry.patternIndex
+            syncPatternToDSP()
         }
     }
 
@@ -523,6 +619,7 @@ final class AppStore {
             currentPatternLoopCount = 0
             if let entry = currentSongEntry {
                 project.currentPatternIndex = entry.patternIndex
+                syncPatternToDSP()
             }
         }
     }
