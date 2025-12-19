@@ -35,43 +35,50 @@ struct UIMixerChannel: View {
             .buttonStyle(.plain)
             .hoverEffect()
 
-            // Pan knob
-            UIBipolarKnob(
-                value: Binding(
-                    get: { voice.pan },
-                    set: { store.setPan($0, for: voiceType) }
-                ),
-                label: "Pan",
-                accentColor: voiceType.color,
-                size: UISizes.knobSmall,
-                defaultValue: 0.0
-            )
+            // Pan slider (-100 to +100, 0 = center)
+            VStack(spacing: 2) {
+                Text("PAN")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(UIColors.textSecondary)
 
-            // Send knobs
-            HStack(spacing: UISpacing.xs) {
-                // Reverb send
-                UIKnob(
+                CompactBipolarSlider(
+                    value: Binding(
+                        get: { voice.pan },
+                        set: { store.setPan($0, for: voiceType) }
+                    ),
+                    accentColor: voiceType.color,
+                    defaultValue: 0.0
+                )
+            }
+
+            // Reverb send slider (0-100)
+            VStack(spacing: 2) {
+                Text("REV")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(UIColors.textSecondary)
+
+                CompactParameterSlider(
                     value: Binding(
                         get: { voice.reverbSend },
                         set: { updateVoice { $0.reverbSend = $1 }($0) }
                     ),
-                    label: "Rev",
                     accentColor: UIColors.accentMagenta,
-                    size: 32,
-                    showValue: false,
                     defaultValue: 0.0
                 )
+            }
 
-                // Delay send
-                UIKnob(
+            // Delay send slider (0-100)
+            VStack(spacing: 2) {
+                Text("DLY")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(UIColors.textSecondary)
+
+                CompactParameterSlider(
                     value: Binding(
                         get: { voice.delaySend },
                         set: { updateVoice { $0.delaySend = $1 }($0) }
                     ),
-                    label: "Dly",
                     accentColor: UIColors.accentOrange,
-                    size: 32,
-                    showValue: false,
                     defaultValue: 0.0
                 )
             }

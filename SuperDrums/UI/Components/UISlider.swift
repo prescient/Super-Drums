@@ -200,6 +200,161 @@ struct BipolarSlider: View {
     }
 }
 
+// MARK: - Compact Parameter Slider
+
+/// A compact horizontal slider for use in mixer channels.
+/// Displays value as 0-100.
+struct CompactParameterSlider: View {
+    @Binding var value: Float
+    var accentColor: Color = UIColors.accentCyan
+    var defaultValue: Float = 0.5
+    var width: CGFloat = 60
+
+    private let trackHeight: CGFloat = 6
+    @State private var isDragging: Bool = false
+
+    var body: some View {
+        VStack(spacing: 2) {
+            // Slider track
+            GeometryReader { geometry in
+                let trackWidth = geometry.size.width
+                let fillWidth = CGFloat(value) * trackWidth
+
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: trackHeight / 2)
+                        .fill(UIColors.border)
+                        .frame(height: trackHeight)
+
+                    // Filled track
+                    RoundedRectangle(cornerRadius: trackHeight / 2)
+                        .fill(accentColor)
+                        .frame(width: max(0, fillWidth), height: trackHeight)
+                        .neonGlow(color: accentColor, radius: 3, isActive: isDragging)
+
+                    // Thumb
+                    Circle()
+                        .fill(UIColors.textPrimary)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                        .offset(x: max(0, min(fillWidth - 6, trackWidth - 12)))
+                }
+                .frame(height: 14)
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                value = defaultValue
+                            }
+                        }
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { gesture in
+                            isDragging = true
+                            let newValue = Float(gesture.location.x / trackWidth)
+                            value = max(0, min(1, newValue))
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                        }
+                )
+            }
+            .frame(width: width, height: 14)
+
+            // Value display
+            Text(String(format: "%.0f", value * 100))
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(isDragging ? UIColors.textPrimary : UIColors.textSecondary)
+        }
+    }
+}
+
+// MARK: - Compact Bipolar Slider
+
+/// A compact bipolar slider for pan controls in mixer channels.
+/// Displays value as -100 to +100 with 0 being center.
+struct CompactBipolarSlider: View {
+    @Binding var value: Float
+    var accentColor: Color = UIColors.accentCyan
+    var defaultValue: Float = 0.0
+    var width: CGFloat = 60
+
+    private let trackHeight: CGFloat = 6
+    @State private var isDragging: Bool = false
+
+    var body: some View {
+        VStack(spacing: 2) {
+            // Slider track
+            GeometryReader { geometry in
+                let trackWidth = geometry.size.width
+                let center = trackWidth / 2
+                let normalizedValue = (value + 1) / 2 // Convert -1...1 to 0...1
+                let valueX = CGFloat(normalizedValue) * trackWidth
+
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: trackHeight / 2)
+                        .fill(UIColors.border)
+                        .frame(height: trackHeight)
+
+                    // Center line
+                    Rectangle()
+                        .fill(UIColors.textSecondary)
+                        .frame(width: 1, height: trackHeight + 2)
+                        .offset(x: center - 0.5)
+
+                    // Filled track from center
+                    let fillStart = value >= 0 ? center : valueX
+                    let fillWidth = abs(valueX - center)
+
+                    RoundedRectangle(cornerRadius: trackHeight / 2)
+                        .fill(accentColor)
+                        .frame(width: fillWidth, height: trackHeight)
+                        .offset(x: fillStart)
+                        .neonGlow(color: accentColor, radius: 3, isActive: isDragging)
+
+                    // Thumb
+                    Circle()
+                        .fill(UIColors.textPrimary)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                        .offset(x: max(0, min(valueX - 6, trackWidth - 12)))
+                }
+                .frame(height: 14)
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                value = defaultValue
+                            }
+                        }
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { gesture in
+                            isDragging = true
+                            let normalizedNewValue = Float(gesture.location.x / trackWidth)
+                            let newValue = (normalizedNewValue * 2) - 1 // Convert 0...1 to -1...1
+                            value = max(-1, min(1, newValue))
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                        }
+                )
+            }
+            .frame(width: width, height: 14)
+
+            // Value display
+            Text(value == 0 ? "C" : String(format: "%+.0f", value * 100))
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(isDragging ? UIColors.textPrimary : UIColors.textSecondary)
+        }
+    }
+}
+
 // MARK: - Preview
 
 #Preview {

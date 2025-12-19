@@ -106,84 +106,77 @@ struct UIMixerView: View {
     private var masterEffectsBar: some View {
         HStack(spacing: UISpacing.xl) {
             // Reverb
-            VStack(spacing: UISpacing.xs) {
+            VStack(alignment: .leading, spacing: UISpacing.xs) {
                 Text("REVERB")
                     .labelStyle()
 
-                UIKnob(
+                ParameterSlider(
                     value: $store.reverbMix,
                     label: "Mix",
                     accentColor: UIColors.accentMagenta,
-                    size: UISizes.knobSmall,
                     defaultValue: 0.3
                 )
             }
+            .frame(width: 200)
 
             // Delay
-            VStack(spacing: UISpacing.xs) {
+            VStack(alignment: .leading, spacing: UISpacing.xs) {
                 Text("DELAY")
                     .labelStyle()
 
-                HStack(spacing: UISpacing.sm) {
-                    UIKnob(
-                        value: $store.delayMix,
-                        label: "Mix",
-                        accentColor: UIColors.accentOrange,
-                        size: UISizes.knobSmall,
-                        defaultValue: 0.2
-                    )
+                ParameterSlider(
+                    value: $store.delayMix,
+                    label: "Mix",
+                    accentColor: UIColors.accentOrange,
+                    defaultValue: 0.2
+                )
 
-                    UIKnob(
-                        value: $store.delayTime,
-                        label: "Time",
-                        accentColor: UIColors.accentOrange,
-                        size: UISizes.knobSmall,
-                        defaultValue: 0.5
-                    )
+                ParameterSlider(
+                    value: $store.delayTime,
+                    label: "Time",
+                    accentColor: UIColors.accentOrange,
+                    defaultValue: 0.5
+                )
 
-                    UIKnob(
-                        value: $store.delayFeedback,
-                        label: "Feedback",
-                        accentColor: UIColors.accentOrange,
-                        size: UISizes.knobSmall,
-                        defaultValue: 0.4
-                    )
-                }
+                ParameterSlider(
+                    value: $store.delayFeedback,
+                    label: "Feedback",
+                    accentColor: UIColors.accentOrange,
+                    defaultValue: 0.4
+                )
             }
+            .frame(width: 200)
 
             Spacer()
 
             // Compressor
-            VStack(spacing: UISpacing.xs) {
+            VStack(alignment: .leading, spacing: UISpacing.xs) {
                 Text("COMPRESSOR")
                     .labelStyle()
 
-                HStack(spacing: UISpacing.sm) {
-                    UIKnob(
-                        value: Binding(
-                            get: { (store.project.compressorThreshold + 40) / 40 },
-                            set: { store.project.compressorThreshold = ($0 * 40) - 40 }
-                        ),
-                        label: "Threshold",
-                        accentColor: UIColors.accentGreen,
-                        size: UISizes.knobSmall,
-                        valueFormatter: { String(format: "%.0fdB", ($0 * 40) - 40) },
-                        defaultValue: 0.75  // -10dB
-                    )
+                ParameterSlider(
+                    value: Binding(
+                        get: { (store.project.compressorThreshold + 40) / 40 },
+                        set: { store.project.compressorThreshold = ($0 * 40) - 40 }
+                    ),
+                    label: "Threshold",
+                    accentColor: UIColors.accentGreen,
+                    valueFormatter: { String(format: "%.0fdB", ($0 * 40) - 40) },
+                    defaultValue: 0.75  // -10dB
+                )
 
-                    UIKnob(
-                        value: Binding(
-                            get: { (store.project.compressorRatio - 1) / 19 },
-                            set: { store.project.compressorRatio = ($0 * 19) + 1 }
-                        ),
-                        label: "Ratio",
-                        accentColor: UIColors.accentGreen,
-                        size: UISizes.knobSmall,
-                        valueFormatter: { String(format: "%.1f:1", ($0 * 19) + 1) },
-                        defaultValue: 0.158  // 4:1
-                    )
-                }
+                ParameterSlider(
+                    value: Binding(
+                        get: { (store.project.compressorRatio - 1) / 19 },
+                        set: { store.project.compressorRatio = ($0 * 19) + 1 }
+                    ),
+                    label: "Ratio",
+                    accentColor: UIColors.accentGreen,
+                    valueFormatter: { String(format: "%.1f:1", ($0 * 19) + 1) },
+                    defaultValue: 0.158  // 4:1
+                )
             }
+            .frame(width: 200)
         }
         .padding(.horizontal, UISpacing.lg)
         .padding(.vertical, UISpacing.md)
