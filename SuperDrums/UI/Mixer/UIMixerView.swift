@@ -156,8 +156,8 @@ struct UIMixerView: View {
 
                 ParameterSlider(
                     value: Binding(
-                        get: { (store.project.compressorThreshold + 40) / 40 },
-                        set: { store.project.compressorThreshold = ($0 * 40) - 40 }
+                        get: { (store.compressorThreshold + 40) / 40 },
+                        set: { store.compressorThreshold = ($0 * 40) - 40 }
                     ),
                     label: "Threshold",
                     accentColor: UIColors.accentGreen,
@@ -167,8 +167,8 @@ struct UIMixerView: View {
 
                 ParameterSlider(
                     value: Binding(
-                        get: { (store.project.compressorRatio - 1) / 19 },
-                        set: { store.project.compressorRatio = ($0 * 19) + 1 }
+                        get: { (store.compressorRatio - 1) / 19 },
+                        set: { store.compressorRatio = ($0 * 19) + 1 }
                     ),
                     label: "Ratio",
                     accentColor: UIColors.accentGreen,

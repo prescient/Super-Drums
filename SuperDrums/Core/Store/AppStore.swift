@@ -132,6 +132,10 @@ final class AppStore {
                 time: project.delayTime,
                 feedback: project.delayFeedback
             )
+            dspEngine.setCompressorParameters(
+                threshold: project.compressorThreshold,
+                ratio: project.compressorRatio
+            )
         } catch {
             // Audio engine failed to start - app will operate without sound
         }
@@ -239,6 +243,32 @@ final class AppStore {
             mix: project.delayMix,
             time: project.delayTime,
             feedback: project.delayFeedback
+        )
+    }
+
+    /// Compressor threshold in dB (synced to DSP engine)
+    var compressorThreshold: Float {
+        get { project.compressorThreshold }
+        set {
+            project.compressorThreshold = max(-40, min(0, newValue))
+            syncCompressorParameters()
+        }
+    }
+
+    /// Compressor ratio (synced to DSP engine)
+    var compressorRatio: Float {
+        get { project.compressorRatio }
+        set {
+            project.compressorRatio = max(1, min(20, newValue))
+            syncCompressorParameters()
+        }
+    }
+
+    /// Sync compressor parameters to DSP
+    private func syncCompressorParameters() {
+        dspEngine.setCompressorParameters(
+            threshold: project.compressorThreshold,
+            ratio: project.compressorRatio
         )
     }
 
@@ -844,6 +874,10 @@ final class AppStore {
                 time: project.delayTime,
                 feedback: project.delayFeedback
             )
+            dspEngine.setCompressorParameters(
+                threshold: project.compressorThreshold,
+                ratio: project.compressorRatio
+            )
         } catch {
             persistenceError = "Failed to load project: \(error.localizedDescription)"
         }
@@ -861,6 +895,10 @@ final class AppStore {
             mix: project.delayMix,
             time: project.delayTime,
             feedback: project.delayFeedback
+        )
+        dspEngine.setCompressorParameters(
+            threshold: project.compressorThreshold,
+            ratio: project.compressorRatio
         )
     }
 
@@ -920,6 +958,10 @@ final class AppStore {
                 mix: project.delayMix,
                 time: project.delayTime,
                 feedback: project.delayFeedback
+            )
+            dspEngine.setCompressorParameters(
+                threshold: project.compressorThreshold,
+                ratio: project.compressorRatio
             )
         } catch {
             persistenceError = "Failed to load kit: \(error.localizedDescription)"

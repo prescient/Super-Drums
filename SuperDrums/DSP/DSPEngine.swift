@@ -36,6 +36,7 @@ final class DSPEngine {
     /// Master effects
     private var reverbEffect: ReverbEffect?
     private var delayEffect: DelayEffect?
+    private var compressorEffect: CompressorEffect?
 
     /// Callback for step advancement (called on main thread)
     var onStepAdvanced: ((Int) -> Void)?
@@ -88,6 +89,7 @@ final class DSPEngine {
         // Initialize effects
         reverbEffect = ReverbEffect(sampleRate: Float(sampleRate))
         delayEffect = DelayEffect(sampleRate: Float(sampleRate))
+        compressorEffect = CompressorEffect(sampleRate: Float(sampleRate))
 
         // Capture self weakly and the synths array for the audio thread
         let state = playbackState
@@ -95,6 +97,7 @@ final class DSPEngine {
         let sr = sampleRate
         let reverb = reverbEffect!
         let delay = delayEffect!
+        let compressor = compressorEffect!
 
         // Create the sequencer source node
         // This runs on the audio render thread and provides sample-accurate timing
@@ -107,6 +110,7 @@ final class DSPEngine {
                 audioBufferList: audioBufferList,
                 reverb: reverb,
                 delay: delay,
+                compressor: compressor,
                 onStepAdvanced: { step in
                     DispatchQueue.main.async {
                         self?.onStepAdvanced?(step)
@@ -193,6 +197,12 @@ final class DSPEngine {
         playbackState.delayFeedback = max(0, min(0.95, feedback)) // Limit feedback to prevent runaway
     }
 
+    /// Set compressor parameters
+    func setCompressorParameters(threshold: Float, ratio: Float) {
+        playbackState.compressorThreshold = max(-40, min(0, threshold)) // -40 to 0 dB
+        playbackState.compressorRatio = max(1, min(20, ratio)) // 1:1 to 20:1
+    }
+
     // MARK: - Pattern Data
 
     /// Updates the current pattern data for playback
@@ -249,6 +259,7 @@ final class DSPEngine {
         audioBufferList: UnsafeMutablePointer<AudioBufferList>,
         reverb: ReverbEffect,
         delay: DelayEffect,
+        compressor: CompressorEffect,
         onStepAdvanced: @escaping (Int) -> Void,
         onVoiceTriggered: @escaping (DrumVoiceType, Float) -> Void
     ) -> OSStatus {
@@ -291,6 +302,8 @@ final class DSPEngine {
         delay.mix = state.delayMix
         delay.delayTime = state.delayTime
         delay.feedback = state.delayFeedback
+        compressor.threshold = state.compressorThreshold
+        compressor.ratio = state.compressorRatio
 
         // Process each sample
         for frameIndex in 0..<Int(frameCount) {
@@ -392,9 +405,12 @@ final class DSPEngine {
             leftSample *= masterVol
             rightSample *= masterVol
 
+            // Apply compressor (post-fader, pre-clip)
+            let (compressedLeft, compressedRight) = compressor.process(inputL: leftSample, inputR: rightSample)
+
             // Soft clip to prevent harsh distortion
-            let clippedLeft = softClip(leftSample)
-            let clippedRight = softClip(rightSample)
+            let clippedLeft = softClip(compressedLeft)
+            let clippedRight = softClip(compressedRight)
 
             // Accumulate RMS for metering
             leftRMSSum += clippedLeft * clippedLeft
@@ -528,6 +544,10 @@ private final class PlaybackState: @unchecked Sendable {
     var delayTime: Float = 0.5
     var delayFeedback: Float = 0.4
 
+    /// Compressor settings
+    var compressorThreshold: Float = -10.0  // dB
+    var compressorRatio: Float = 4.0        // ratio:1
+
     /// Voice send levels for reverb (per voice)
     var voiceReverbSend: [Float] = Array(repeating: 0.0, count: 10)
 
@@ -648,6 +668,19 @@ private final class DrumVoiceSynth: @unchecked Sendable {
     private var snareNoiseBpLow: Float = 0
     private var snareNoiseBpBand: Float = 0
 
+    // MARK: - Hi-Hat-specific State (Audio thread only)
+
+    /// 6 oscillator phases for TR-808 style metallic hi-hat
+    private var hiHatPhases: [Float] = [0, 0, 0, 0, 0, 0]
+
+    /// Hi-hat bandpass filter state
+    private var hiHatBpLow: Float = 0
+    private var hiHatBpBand: Float = 0
+
+    /// Hi-hat highpass filter state
+    private var hiHatHpLow: Float = 0
+    private var hiHatHpBand: Float = 0
+
     // MARK: - Filter State (Audio thread only)
 
     private var svfLow: Float = 0
@@ -712,26 +745,31 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             params.drive = 0.08
 
         case .closedHat:
-            params.basePitch = 0.7
-            params.pitchEnvAmount = 0.0
-            params.toneMix = 0.95
-            params.filterType = 1
-            params.filterCutoff = 0.6
-            params.filterResonance = 0.15
+            // TR-808 style: 6 square wave oscillators + filtering
+            // Pitch controls oscillator frequencies, toneMix adds noise shimmer
+            params.basePitch = 0.5       // Nominal pitch (scales 6 oscillators 0.5x-1.5x)
+            params.pitchEnvAmount = 0.0  // No pitch envelope for hats
+            params.toneMix = 0.2         // 20% noise shimmer on top of metallic oscillators
+            params.filterType = 1        // Highpass (controls brightness 7-11kHz)
+            params.filterCutoff = 0.5    // Mid brightness
+            params.filterResonance = 0.0 // No resonance for clean hat sound
             params.attack = 0.001
-            params.decay = 0.15
+            params.decay = 0.15          // Not used for closed hat (fixed 50ms)
             params.release = 0.02
+            params.drive = 0.05          // Subtle analog warmth
 
         case .openHat:
-            params.basePitch = 0.7
+            // TR-808 style: same synthesis as closed but longer decay
+            params.basePitch = 0.5       // Nominal pitch
             params.pitchEnvAmount = 0.0
-            params.toneMix = 0.95
-            params.filterType = 1
-            params.filterCutoff = 0.55
-            params.filterResonance = 0.2
+            params.toneMix = 0.25        // Slightly more noise shimmer for open hat
+            params.filterType = 1        // Highpass
+            params.filterCutoff = 0.4    // Slightly darker than closed hat
+            params.filterResonance = 0.0
             params.attack = 0.001
-            params.decay = 0.55
+            params.decay = 0.55          // Controls open hat ring time
             params.release = 0.1
+            params.drive = 0.05
 
         case .clap:
             params.basePitch = 0.6
@@ -862,6 +900,15 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             self.snareNoiseBpLow = 0
             self.snareNoiseBpBand = 0
         }
+
+        // Reset hi-hat-specific state
+        if voiceType == .closedHat || voiceType == .openHat {
+            self.hiHatPhases = [0, 0, 0, 0, 0, 0]
+            self.hiHatBpLow = 0
+            self.hiHatBpBand = 0
+            self.hiHatHpLow = 0
+            self.hiHatHpBand = 0
+        }
     }
 
     /// Render a single sample (called from audio thread)
@@ -874,6 +921,11 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         // Use specialized rendering for snare drum
         if voiceType == .snare {
             return renderSnareSample(sampleRate: sampleRate)
+        }
+
+        // Use specialized rendering for hi-hats (TR-808 style metallic synthesis)
+        if voiceType == .closedHat || voiceType == .openHat {
+            return renderHiHatSample(sampleRate: sampleRate)
         }
 
         // Use thread-safe active parameters
@@ -1090,6 +1142,169 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             svfHigh = 0
             snareNoiseBpLow = 0
             snareNoiseBpBand = 0
+        }
+
+        // Update level for metering
+        currentLevel = abs(output)
+
+        return output
+    }
+
+    // MARK: - Hi-Hat Synthesis (TR-808 Style)
+
+    /// TR-808 hi-hat synthesis using 6 square wave oscillators.
+    /// Reference: https://www.baratatronix.com/blog/cascadia-808-cymbal-hi-hat-synthesis
+    ///
+    /// Architecture:
+    /// - Six square wave oscillators at inharmonic frequencies (metallic "hash")
+    /// - Bandpass filter centered around 3440 Hz
+    /// - Highpass filter to remove low frequencies
+    /// - Pitch control scales all oscillator frequencies proportionally
+    /// - Closed hat: ~50ms decay, Open hat: uses voice decay parameter
+    private func renderHiHatSample(sampleRate: Float) -> Float {
+        let params = activeParameters
+        let dt = 1.0 / sampleRate
+
+        // === TR-808 OSCILLATOR FREQUENCIES ===
+        // Original TR-808 hi-hat frequencies (slightly inharmonic for metallic character)
+        // These create the characteristic "metallic hash" when mixed
+        let baseFrequencies: [Float] = [
+            800.0,    // Oscillator 1 (tuneable on real 808)
+            540.0,    // Oscillator 2 (tuneable on real 808)
+            522.7,    // Oscillator 3 (fixed)
+            369.6,    // Oscillator 4 (fixed)
+            304.4,    // Oscillator 5 (fixed)
+            205.3     // Oscillator 6 (fixed)
+        ]
+
+        // Pitch control scales all frequencies proportionally
+        // basePitch 0.5 = nominal, 0.0 = half pitch, 1.0 = double pitch
+        let pitchMod = 0.5 + params.basePitch  // 0.5 to 1.5 range
+        let frequencies = baseFrequencies.map { $0 * pitchMod }
+
+        // === GENERATE SQUARE WAVE OSCILLATORS ===
+        // Mix all 6 square waves together
+        var oscillatorMix: Float = 0
+
+        for i in 0..<6 {
+            // Square wave: sign of sine wave
+            let squareWave: Float = sinf(hiHatPhases[i] * 2.0 * .pi) >= 0 ? 1.0 : -1.0
+            oscillatorMix += squareWave
+
+            // Update phase
+            hiHatPhases[i] += frequencies[i] / sampleRate
+            if hiHatPhases[i] >= 1.0 {
+                hiHatPhases[i] -= 1.0
+            }
+        }
+
+        // Normalize the mix (6 oscillators summed)
+        oscillatorMix /= 6.0
+
+        // === BANDPASS FILTER (3440 Hz center) ===
+        // This shapes the metallic character
+        let bpCenterFreq: Float = 3440.0
+        let bpQ: Float = 2.0  // Moderate resonance
+        let bpNormFreq = min(bpCenterFreq, sampleRate * 0.45) / sampleRate
+        let bpF = 2.0 * sinf(.pi * bpNormFreq)
+        let bpDamping = 1.0 / bpQ
+
+        // SVF bandpass
+        hiHatBpLow = hiHatBpLow + bpF * hiHatBpBand
+        let bpHigh = oscillatorMix - hiHatBpLow - bpDamping * hiHatBpBand
+        hiHatBpBand = bpF * bpHigh + hiHatBpBand
+
+        // Protect against instability
+        if !hiHatBpLow.isFinite { hiHatBpLow = 0 }
+        if !hiHatBpBand.isFinite { hiHatBpBand = 0 }
+
+        let bpOutput = hiHatBpBand  // Bandpass output
+
+        // === HIGHPASS FILTER (7000 Hz) ===
+        // Removes low frequency content for brighter, more realistic hi-hat
+        let hpCutoff: Float = 7000.0 + params.filterCutoff * 4000.0  // 7-11kHz based on cutoff
+        let hpNormFreq = min(hpCutoff, sampleRate * 0.45) / sampleRate
+        let hpF = 2.0 * sinf(.pi * hpNormFreq)
+        let hpQ: Float = 0.7  // Low resonance for clean highpass
+
+        // SVF highpass
+        hiHatHpLow = hiHatHpLow + hpF * hiHatHpBand
+        let hpHigh = bpOutput - hiHatHpLow - (1.0 / hpQ) * hiHatHpBand
+        hiHatHpBand = hpF * hpHigh + hiHatHpBand
+
+        // Protect against instability
+        if !hiHatHpLow.isFinite { hiHatHpLow = 0 }
+        if !hiHatHpBand.isFinite { hiHatHpBand = 0 }
+
+        var output = hpHigh  // Highpass output
+
+        // === AMPLITUDE ENVELOPE ===
+        // Closed hat: fixed short decay (~50ms)
+        // Open hat: uses the decay parameter (90-600ms)
+        let ampEnv: Float
+        if voiceType == .closedHat {
+            // Fixed short decay for closed hat (50ms)
+            let closedDecay: Float = 0.05
+            ampEnv = expf(-totalPlayTime / closedDecay)
+
+            // Stop playing when envelope is very low
+            if ampEnv < 0.001 {
+                isPlaying = false
+                currentLevel = 0
+                return 0
+            }
+        } else {
+            // Open hat uses ADSR envelope with decay parameter
+            ampEnv = processEnvelope(dt: dt, params: params)
+
+            if envelopeStage == .idle {
+                isPlaying = false
+                currentLevel = 0
+                return 0
+            }
+        }
+
+        // Apply envelope
+        output *= ampEnv
+
+        // === NOISE LAYER (optional, controlled by toneMix) ===
+        // Add subtle noise for additional shimmer
+        let noiseAmount = params.toneMix * 0.3  // toneMix adds up to 30% noise
+        if noiseAmount > 0.01 {
+            let noise = Float.random(in: -1...1) * noiseAmount * ampEnv
+            output += noise
+        }
+
+        // === POST-PROCESSING ===
+
+        // Apply drive/saturation
+        if params.drive > 0.01 {
+            let driveAmount = 1.0 + params.drive * 8.0
+            output = tanhf(output * driveAmount) / tanhf(driveAmount)
+        }
+
+        // Apply bitcrush if enabled
+        if params.bitcrush > 0.01 {
+            output = processBitcrush(input: output, sampleRate: sampleRate, bitcrush: params.bitcrush)
+        }
+
+        // Apply velocity
+        output *= velocity
+
+        // Boost overall level (6 square waves need gain compensation)
+        output *= 2.5
+
+        // Update envelope times
+        envelopeTime += dt
+        totalPlayTime += dt
+
+        // Protect against NaN/Inf
+        if !output.isFinite {
+            output = 0
+            hiHatBpLow = 0
+            hiHatBpBand = 0
+            hiHatHpLow = 0
+            hiHatHpBand = 0
         }
 
         // Update level for metering
@@ -1476,5 +1691,113 @@ private final class DelayEffect: @unchecked Sendable {
         delayBufferL = Array(repeating: 0, count: maxDelaySamples)
         delayBufferR = Array(repeating: 0, count: maxDelaySamples)
         writePosition = 0
+    }
+}
+
+// MARK: - Compressor Effect
+
+/// Stereo bus compressor with peak detection
+/// Optimized for drum bus compression with fast attack
+private final class CompressorEffect: @unchecked Sendable {
+
+    /// Threshold in dB (-40 to 0)
+    var threshold: Float = -10.0
+
+    /// Ratio (1:1 to 20:1)
+    var ratio: Float = 4.0
+
+    /// Attack time in seconds (fixed for drums - fast attack)
+    private let attackTime: Float = 0.002  // 2ms
+
+    /// Release time in seconds (fixed for drums - medium release)
+    private let releaseTime: Float = 0.1   // 100ms
+
+    /// Envelope follower state
+    private var envelopeL: Float = 0.0
+    private var envelopeR: Float = 0.0
+
+    /// Sample rate
+    private let sampleRate: Float
+
+    /// Attack coefficient (pre-calculated)
+    private var attackCoeff: Float = 0.0
+
+    /// Release coefficient (pre-calculated)
+    private var releaseCoeff: Float = 0.0
+
+    init(sampleRate: Float = 44100) {
+        self.sampleRate = sampleRate
+        updateCoefficients()
+    }
+
+    private func updateCoefficients() {
+        // Calculate coefficients for exponential envelope
+        // coeff = exp(-1 / (time * sampleRate))
+        attackCoeff = expf(-1.0 / (attackTime * sampleRate))
+        releaseCoeff = expf(-1.0 / (releaseTime * sampleRate))
+    }
+
+    /// Process a stereo sample through the compressor
+    func process(inputL: Float, inputR: Float) -> (Float, Float) {
+        // Bypass if ratio is 1:1 (no compression)
+        if ratio <= 1.0 {
+            return (inputL, inputR)
+        }
+
+        // Peak detection (absolute value)
+        let peakL = abs(inputL)
+        let peakR = abs(inputR)
+
+        // Envelope follower with attack/release
+        // Attack: fast rise to track transients
+        // Release: slower fall for smooth gain recovery
+        if peakL > envelopeL {
+            envelopeL = attackCoeff * envelopeL + (1.0 - attackCoeff) * peakL
+        } else {
+            envelopeL = releaseCoeff * envelopeL + (1.0 - releaseCoeff) * peakL
+        }
+
+        if peakR > envelopeR {
+            envelopeR = attackCoeff * envelopeR + (1.0 - attackCoeff) * peakR
+        } else {
+            envelopeR = releaseCoeff * envelopeR + (1.0 - releaseCoeff) * peakR
+        }
+
+        // Use linked stereo detection (max of both channels) for coherent imaging
+        let envelope = max(envelopeL, envelopeR)
+
+        // Protect against log(0)
+        guard envelope > 0.00001 else {
+            return (inputL, inputR)
+        }
+
+        // Convert envelope to dB
+        let envelopeDb = 20.0 * log10f(envelope)
+
+        // Calculate gain reduction
+        var gainReductionDb: Float = 0.0
+
+        if envelopeDb > threshold {
+            // Amount above threshold
+            let overshoot = envelopeDb - threshold
+            // Compressed amount = overshoot * (1 - 1/ratio)
+            // This means: output = threshold + overshoot/ratio
+            gainReductionDb = overshoot * (1.0 - 1.0 / ratio)
+        }
+
+        // Convert gain reduction to linear
+        let gainLinear = powf(10.0, -gainReductionDb / 20.0)
+
+        // Apply gain
+        let outputL = inputL * gainLinear
+        let outputR = inputR * gainLinear
+
+        return (outputL, outputR)
+    }
+
+    /// Reset envelope state
+    func reset() {
+        envelopeL = 0.0
+        envelopeR = 0.0
     }
 }
