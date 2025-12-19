@@ -40,6 +40,9 @@
 		F0000001031 /* UISongArrangementEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002031 /* UISongArrangementEditor.swift */; };
 		F0000001032 /* UISlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002032 /* UISlider.swift */; };
 		F0000001033 /* UIPatternBank.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002033 /* UIPatternBank.swift */; };
+		F0000001034 /* DrumKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002034 /* DrumKit.swift */; };
+		F0000001035 /* PersistenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002035 /* PersistenceManager.swift */; };
+		F0000001036 /* UISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002036 /* UISettingsView.swift */; };
 		F0000001100 /* PatternTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002100 /* PatternTests.swift */; };
 		F0000001101 /* TrackRandomizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002101 /* TrackRandomizationTests.swift */; };
 		F0000001102 /* SongArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002102 /* SongArrangementTests.swift */; };
@@ -90,6 +93,9 @@
 		F0000002031 /* UISongArrangementEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISongArrangementEditor.swift; sourceTree = "<group>"; };
 		F0000002032 /* UISlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISlider.swift; sourceTree = "<group>"; };
 		F0000002033 /* UIPatternBank.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIPatternBank.swift; sourceTree = "<group>"; };
+		F0000002034 /* DrumKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrumKit.swift; sourceTree = "<group>"; };
+		F0000002035 /* PersistenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceManager.swift; sourceTree = "<group>"; };
+		F0000002036 /* UISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISettingsView.swift; sourceTree = "<group>"; };
 		F0000002100 /* PatternTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternTests.swift; sourceTree = "<group>"; };
 		F0000002101 /* TrackRandomizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRandomizationTests.swift; sourceTree = "<group>"; };
 		F0000002102 /* SongArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongArrangementTests.swift; sourceTree = "<group>"; };
@@ -160,6 +166,7 @@
 			children = (
 				F0000005015 /* Models */,
 				F0000005016 /* Store */,
+				F0000005018 /* Services */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -173,6 +180,7 @@
 				F0000005010 /* Mixer */,
 				F0000005011 /* SoundDesign */,
 				F0000005012 /* Performance */,
+				F0000005019 /* Settings */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -266,6 +274,7 @@
 				F0000002007 /* Project.swift */,
 				F0000002027 /* TrackRandomizationSettings.swift */,
 				F0000002030 /* SongArrangementEntry.swift */,
+				F0000002034 /* DrumKit.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -287,6 +296,22 @@
 				F0000002103 /* AppStoreTests.swift */,
 			);
 			path = SuperDrumsTests;
+			sourceTree = "<group>";
+		};
+		F0000005018 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				F0000002035 /* PersistenceManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		F0000005019 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				F0000002036 /* UISettingsView.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -420,6 +445,9 @@
 				F0000001023 /* UIPerformanceView.swift in Sources */,
 				F0000001024 /* UIXYPad.swift in Sources */,
 				F0000001025 /* DSPEngine.swift in Sources */,
+				F0000001034 /* DrumKit.swift in Sources */,
+				F0000001035 /* PersistenceManager.swift in Sources */,
+				F0000001036 /* UISettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

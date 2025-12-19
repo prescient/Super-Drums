@@ -52,6 +52,10 @@ struct ContentView: View {
         case .perform:
             UIPerformanceView(store: store)
                 .transition(.opacity)
+
+        case .settings:
+            UISettingsView(store: store)
+                .transition(.opacity)
         }
     }
 }
@@ -112,6 +116,9 @@ struct AUv3ContentView: View {
 
         case .perform:
             UIPerformanceView(store: store)
+
+        case .settings:
+            UISettingsView(store: store)
         }
     }
 

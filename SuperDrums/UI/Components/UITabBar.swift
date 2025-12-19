@@ -70,6 +70,7 @@ struct UITabBarItem: View {
         case .mixer: return "2"
         case .sound: return "3"
         case .perform: return "4"
+        case .settings: return "5"
         }
     }
 }

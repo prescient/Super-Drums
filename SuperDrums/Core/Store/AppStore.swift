@@ -781,6 +781,170 @@ final class AppStore {
             }
         }
     }
+
+    // MARK: - Persistence State
+
+    /// List of saved projects (refreshed on demand)
+    var savedProjects: [ProjectMetadata] = []
+
+    /// List of saved drum kits (refreshed on demand)
+    var savedKits: [KitMetadata] = []
+
+    /// Whether a save/load operation is in progress
+    var isSaving: Bool = false
+
+    /// Last error from persistence operations
+    var persistenceError: String?
+
+    // MARK: - Project Persistence
+
+    /// Saves the current project to disk
+    func saveCurrentProject() async {
+        isSaving = true
+        persistenceError = nil
+        do {
+            try await PersistenceManager.shared.saveProject(project)
+            await refreshSavedProjects()
+        } catch {
+            persistenceError = "Failed to save project: \(error.localizedDescription)"
+        }
+        isSaving = false
+    }
+
+    /// Saves the current project with a new name
+    func saveProjectAs(name: String) async {
+        var projectToSave = project
+        projectToSave.name = name
+        isSaving = true
+        persistenceError = nil
+        do {
+            try await PersistenceManager.shared.saveProject(projectToSave)
+            project.name = name
+            await refreshSavedProjects()
+        } catch {
+            persistenceError = "Failed to save project: \(error.localizedDescription)"
+        }
+        isSaving = false
+    }
+
+    /// Loads a project from disk
+    func loadProject(metadata: ProjectMetadata) async {
+        isSaving = true
+        persistenceError = nil
+        do {
+            let loadedProject = try await PersistenceManager.shared.loadProject(from: metadata.fileURL)
+            stop() // Stop playback before loading
+            project = loadedProject
+            syncPatternToDSP()
+            // Sync all settings to DSP
+            dspEngine.setMasterVolume(project.masterVolume)
+            dspEngine.setReverbMix(project.reverbMix)
+            dspEngine.setDelayParameters(
+                mix: project.delayMix,
+                time: project.delayTime,
+                feedback: project.delayFeedback
+            )
+        } catch {
+            persistenceError = "Failed to load project: \(error.localizedDescription)"
+        }
+        isSaving = false
+    }
+
+    /// Creates a new empty project
+    func newProject() {
+        stop()
+        project = Project()
+        syncPatternToDSP()
+        dspEngine.setMasterVolume(project.masterVolume)
+        dspEngine.setReverbMix(project.reverbMix)
+        dspEngine.setDelayParameters(
+            mix: project.delayMix,
+            time: project.delayTime,
+            feedback: project.delayFeedback
+        )
+    }
+
+    /// Refreshes the list of saved projects
+    func refreshSavedProjects() async {
+        do {
+            savedProjects = try await PersistenceManager.shared.listProjects()
+        } catch {
+            savedProjects = []
+        }
+    }
+
+    /// Deletes a saved project
+    func deleteProject(metadata: ProjectMetadata) async {
+        do {
+            try await PersistenceManager.shared.deleteProject(at: metadata.fileURL)
+            await refreshSavedProjects()
+        } catch {
+            persistenceError = "Failed to delete project: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Drum Kit Persistence
+
+    /// Saves current voice settings as a drum kit
+    func saveCurrentKit(name: String) async {
+        let kit = DrumKit(from: project, name: name)
+        isSaving = true
+        persistenceError = nil
+        do {
+            try await PersistenceManager.shared.saveKit(kit)
+            await refreshSavedKits()
+        } catch {
+            persistenceError = "Failed to save kit: \(error.localizedDescription)"
+        }
+        isSaving = false
+    }
+
+    /// Loads a drum kit and applies it to the current project
+    func loadKit(metadata: KitMetadata) async {
+        isSaving = true
+        persistenceError = nil
+        do {
+            let kit = try await PersistenceManager.shared.loadKit(from: metadata.fileURL)
+            // Apply kit settings to project
+            project.voices = kit.voices
+            project.masterVolume = kit.masterVolume
+            project.reverbMix = kit.reverbMix
+            project.delayMix = kit.delayMix
+            project.delayTime = kit.delayTime
+            project.delayFeedback = kit.delayFeedback
+            // Sync to DSP
+            syncPatternToDSP()
+            dspEngine.setMasterVolume(project.masterVolume)
+            dspEngine.setReverbMix(project.reverbMix)
+            dspEngine.setDelayParameters(
+                mix: project.delayMix,
+                time: project.delayTime,
+                feedback: project.delayFeedback
+            )
+        } catch {
+            persistenceError = "Failed to load kit: \(error.localizedDescription)"
+        }
+        isSaving = false
+    }
+
+    /// Refreshes the list of saved drum kits
+    func refreshSavedKits() async {
+        do {
+            savedKits = try await PersistenceManager.shared.listKits()
+        } catch {
+            savedKits = []
+        }
+    }
+
+    /// Deletes a saved drum kit
+    func deleteKit(metadata: KitMetadata) async {
+        do {
+            try await PersistenceManager.shared.deleteKit(at: metadata.fileURL)
+            await refreshSavedKits()
+        } catch {
+            persistenceError = "Failed to delete kit: \(error.localizedDescription)"
+        }
+    }
 }
 
 // MARK: - App Tab
@@ -791,6 +955,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case mixer
     case sound
     case perform
+    case settings
 
     var id: String { rawValue }
 
@@ -800,6 +965,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .mixer: return "Mixer"
         case .sound: return "Sound"
         case .perform: return "Perform"
+        case .settings: return "Settings"
         }
     }
 
@@ -809,6 +975,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .mixer: return "slider.vertical.3"
         case .sound: return "waveform"
         case .perform: return "hand.tap"
+        case .settings: return "gearshape"
         }
     }
 }
