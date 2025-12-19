@@ -7,49 +7,38 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		/* App */
 		F0000001001 /* SuperDrumsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002001 /* SuperDrumsApp.swift */; };
 		F0000001002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002002 /* ContentView.swift */; };
-		/* Models */
 		F0000001003 /* DrumVoiceType.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002003 /* DrumVoiceType.swift */; };
 		F0000001004 /* Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002004 /* Voice.swift */; };
 		F0000001005 /* Step.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002005 /* Step.swift */; };
 		F0000001006 /* Pattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002006 /* Pattern.swift */; };
 		F0000001007 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002007 /* Project.swift */; };
-		F0000001027 /* TrackRandomizationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002027 /* TrackRandomizationSettings.swift */; };
-		F0000001030 /* SongArrangementEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002030 /* SongArrangementEntry.swift */; };
-		/* Store */
 		F0000001008 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002008 /* AppStore.swift */; };
-		/* Theme */
 		F0000001009 /* UIColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002009 /* UIColors.swift */; };
 		F0000001010 /* UIStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002010 /* UIStyles.swift */; };
-		/* Components */
 		F0000001011 /* UIKnob.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002011 /* UIKnob.swift */; };
 		F0000001012 /* UIFader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002012 /* UIFader.swift */; };
 		F0000001013 /* UIStepButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002013 /* UIStepButton.swift */; };
 		F0000001014 /* UIPadButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002014 /* UIPadButton.swift */; };
 		F0000001015 /* UITabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002015 /* UITabBar.swift */; };
-		/* Sequencer */
 		F0000001016 /* UISequencerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002016 /* UISequencerView.swift */; };
 		F0000001017 /* UISequencerTrackRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002017 /* UISequencerTrackRow.swift */; };
 		F0000001018 /* UISequencerStepCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002018 /* UISequencerStepCell.swift */; };
-		F0000001028 /* UITrackOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002028 /* UITrackOptionsPanel.swift */; };
-		F0000001029 /* UIParameterLockEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002029 /* UIParameterLockEditor.swift */; };
-		F0000001031 /* UISongArrangementEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002031 /* UISongArrangementEditor.swift */; };
-		/* Mixer */
 		F0000001019 /* UIMixerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002019 /* UIMixerView.swift */; };
 		F0000001020 /* UIMixerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002020 /* UIMixerChannel.swift */; };
-		/* SoundDesign */
 		F0000001021 /* UISoundDesignView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002021 /* UISoundDesignView.swift */; };
 		F0000001022 /* UIVoiceEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002022 /* UIVoiceEditor.swift */; };
-		/* Performance */
 		F0000001023 /* UIPerformanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002023 /* UIPerformanceView.swift */; };
 		F0000001024 /* UIXYPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002024 /* UIXYPad.swift */; };
-		/* DSP */
 		F0000001025 /* DSPEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002025 /* DSPEngine.swift */; };
-		/* Assets */
 		F0000001026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F0000002026 /* Assets.xcassets */; };
-		/* Tests */
+		F0000001027 /* TrackRandomizationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002027 /* TrackRandomizationSettings.swift */; };
+		F0000001028 /* UITrackOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002028 /* UITrackOptionsPanel.swift */; };
+		F0000001029 /* UIParameterLockEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002029 /* UIParameterLockEditor.swift */; };
+		F0000001030 /* SongArrangementEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002030 /* SongArrangementEntry.swift */; };
+		F0000001031 /* UISongArrangementEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002031 /* UISongArrangementEditor.swift */; };
+		F0000001032 /* UISlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002032 /* UISlider.swift */; };
 		F0000001100 /* PatternTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002100 /* PatternTests.swift */; };
 		F0000001101 /* TrackRandomizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002101 /* TrackRandomizationTests.swift */; };
 		F0000001102 /* SongArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002102 /* SongArrangementTests.swift */; };
@@ -67,55 +56,44 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F0000003001 /* SuperDrums.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SuperDrums.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F0000003002 /* SuperDrumsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuperDrumsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		/* App */
 		F0000002001 /* SuperDrumsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuperDrumsApp.swift; sourceTree = "<group>"; };
 		F0000002002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		/* Models */
 		F0000002003 /* DrumVoiceType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrumVoiceType.swift; sourceTree = "<group>"; };
 		F0000002004 /* Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Voice.swift; sourceTree = "<group>"; };
 		F0000002005 /* Step.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Step.swift; sourceTree = "<group>"; };
 		F0000002006 /* Pattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pattern.swift; sourceTree = "<group>"; };
 		F0000002007 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
-		F0000002027 /* TrackRandomizationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRandomizationSettings.swift; sourceTree = "<group>"; };
-		F0000002030 /* SongArrangementEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongArrangementEntry.swift; sourceTree = "<group>"; };
-		/* Store */
 		F0000002008 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
-		/* Theme */
 		F0000002009 /* UIColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIColors.swift; sourceTree = "<group>"; };
 		F0000002010 /* UIStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIStyles.swift; sourceTree = "<group>"; };
-		/* Components */
 		F0000002011 /* UIKnob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIKnob.swift; sourceTree = "<group>"; };
 		F0000002012 /* UIFader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIFader.swift; sourceTree = "<group>"; };
 		F0000002013 /* UIStepButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIStepButton.swift; sourceTree = "<group>"; };
 		F0000002014 /* UIPadButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIPadButton.swift; sourceTree = "<group>"; };
 		F0000002015 /* UITabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITabBar.swift; sourceTree = "<group>"; };
-		/* Sequencer */
 		F0000002016 /* UISequencerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISequencerView.swift; sourceTree = "<group>"; };
 		F0000002017 /* UISequencerTrackRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISequencerTrackRow.swift; sourceTree = "<group>"; };
 		F0000002018 /* UISequencerStepCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISequencerStepCell.swift; sourceTree = "<group>"; };
-		F0000002028 /* UITrackOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITrackOptionsPanel.swift; sourceTree = "<group>"; };
-		F0000002029 /* UIParameterLockEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIParameterLockEditor.swift; sourceTree = "<group>"; };
-		F0000002031 /* UISongArrangementEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISongArrangementEditor.swift; sourceTree = "<group>"; };
-		/* Mixer */
 		F0000002019 /* UIMixerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIMixerView.swift; sourceTree = "<group>"; };
 		F0000002020 /* UIMixerChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIMixerChannel.swift; sourceTree = "<group>"; };
-		/* SoundDesign */
 		F0000002021 /* UISoundDesignView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISoundDesignView.swift; sourceTree = "<group>"; };
 		F0000002022 /* UIVoiceEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIVoiceEditor.swift; sourceTree = "<group>"; };
-		/* Performance */
 		F0000002023 /* UIPerformanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIPerformanceView.swift; sourceTree = "<group>"; };
 		F0000002024 /* UIXYPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIXYPad.swift; sourceTree = "<group>"; };
-		/* DSP */
 		F0000002025 /* DSPEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPEngine.swift; sourceTree = "<group>"; };
-		/* Assets */
 		F0000002026 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		/* Tests */
+		F0000002027 /* TrackRandomizationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRandomizationSettings.swift; sourceTree = "<group>"; };
+		F0000002028 /* UITrackOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITrackOptionsPanel.swift; sourceTree = "<group>"; };
+		F0000002029 /* UIParameterLockEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIParameterLockEditor.swift; sourceTree = "<group>"; };
+		F0000002030 /* SongArrangementEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongArrangementEntry.swift; sourceTree = "<group>"; };
+		F0000002031 /* UISongArrangementEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISongArrangementEditor.swift; sourceTree = "<group>"; };
+		F0000002032 /* UISlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISlider.swift; sourceTree = "<group>"; };
 		F0000002100 /* PatternTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternTests.swift; sourceTree = "<group>"; };
 		F0000002101 /* TrackRandomizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRandomizationTests.swift; sourceTree = "<group>"; };
 		F0000002102 /* SongArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongArrangementTests.swift; sourceTree = "<group>"; };
 		F0000002103 /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
+		F0000003001 /* SuperDrums.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SuperDrums.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000003002 /* SuperDrumsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuperDrumsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -214,6 +192,7 @@
 				F0000002013 /* UIStepButton.swift */,
 				F0000002014 /* UIPadButton.swift */,
 				F0000002015 /* UITabBar.swift */,
+				F0000002032 /* UISlider.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -423,6 +402,7 @@
 				F0000001013 /* UIStepButton.swift in Sources */,
 				F0000001014 /* UIPadButton.swift in Sources */,
 				F0000001015 /* UITabBar.swift in Sources */,
+				F0000001032 /* UISlider.swift in Sources */,
 				F0000001016 /* UISequencerView.swift in Sources */,
 				F0000001017 /* UISequencerTrackRow.swift in Sources */,
 				F0000001018 /* UISequencerStepCell.swift in Sources */,
@@ -587,16 +567,16 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = M438647KZX;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Super Drums";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = NO;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UIBackgroundModes = audio;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -620,16 +600,16 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = M438647KZX;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Super Drums";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = NO;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UIBackgroundModes = audio;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -652,7 +632,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = M438647KZX;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -673,7 +653,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = M438647KZX;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;

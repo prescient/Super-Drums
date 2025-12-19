@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os.lock
 
 /// Audio engine with sample-accurate sequencer clock.
 /// Uses AVAudioSourceNode for timing and synthesis.
@@ -38,22 +39,6 @@ final class DSPEngine {
     /// Callback for voice trigger (for UI feedback)
     var onVoiceTriggered: ((DrumVoiceType, Float) -> Void)?
 
-    // MARK: - Debug Fallback Timer
-
-    /// Fallback timer for step advancement when audio callback isn't working
-    /// Set to true to use timer-based step advancement instead of audio-based
-    private static let useDebugTimer = true
-
-    /// Set to true to output a simple test tone instead of synth audio (for debugging)
-    private static let useTestTone = false
-    private static var testTonePhase: Float = 0
-
-    /// Timer for fallback step advancement
-    private var debugTimer: Timer?
-
-    /// Current step for timer-based advancement
-    private var timerStep: Int = 0
-
     // MARK: - Initialization
 
     init() {
@@ -75,25 +60,11 @@ final class DSPEngine {
             try session.setPreferredIOBufferDuration(0.005) // ~5ms latency
             try session.setActive(true)
             sampleRate = session.sampleRate
-
-            // Log audio session details
-            print("DSPEngine: Audio session active")
-            print("DSPEngine: Sample rate: \(session.sampleRate)")
-            print("DSPEngine: Output channels: \(session.outputNumberOfChannels)")
-            print("DSPEngine: Output volume: \(session.outputVolume)")
-            print("DSPEngine: Category: \(session.category.rawValue)")
-
-            // Log output route
-            let route = session.currentRoute
-            for output in route.outputs {
-                print("DSPEngine: Output port: \(output.portName) (\(output.portType.rawValue))")
-            }
         } catch {
-            print("DSPEngine: Failed to setup audio session: \(error)")
+            // Audio session setup failed - engine will use default sample rate
         }
         #else
         sampleRate = 44100.0
-        print("DSPEngine: macOS mode - using default sample rate \(sampleRate)")
         #endif
     }
 
@@ -150,15 +121,10 @@ final class DSPEngine {
         // Ensure mixer volume is at full
         engine.mainMixerNode.outputVolume = 1.0
 
-        print("DSPEngine: Output format: \(outputFormat)")
-        print("DSPEngine: Main mixer connected, volume=\(engine.mainMixerNode.outputVolume)")
-
         // Prepare and start
         engine.prepare()
         try engine.start()
         isRunning = true
-
-        print("DSPEngine: Started at \(sampleRate) Hz, engine.isRunning=\(engine.isRunning)")
     }
 
     /// Stops the audio engine
@@ -168,7 +134,6 @@ final class DSPEngine {
         audioEngine = nil
         sequencerNode = nil
         isRunning = false
-        print("DSPEngine: Stopped")
     }
 
     // MARK: - Transport Control
@@ -180,12 +145,6 @@ final class DSPEngine {
         playbackState.currentStep = 0
         playbackState.samplePosition = 0
         playbackState.isPlaying = true
-        print("DSPEngine: startPlayback called - bpm=\(bpm), stepCount=\(stepCount), isPlaying=\(playbackState.isPlaying)")
-
-        // DEBUG: Start fallback timer for step advancement
-        if Self.useDebugTimer {
-            startDebugTimer(bpm: bpm, stepCount: stepCount)
-        }
     }
 
     /// Stop sequencer playback
@@ -193,92 +152,6 @@ final class DSPEngine {
         playbackState.isPlaying = false
         playbackState.currentStep = 0
         playbackState.samplePosition = 0
-
-        // DEBUG: Stop fallback timer
-        if Self.useDebugTimer {
-            stopDebugTimer()
-        }
-    }
-
-    // MARK: - Debug Timer Methods
-
-    /// Starts a fallback timer for step advancement (DEBUG ONLY)
-    private func startDebugTimer(bpm: Double, stepCount: Int) {
-        stopDebugTimer()
-        timerStep = 0
-
-        // Calculate interval between steps: (60 / BPM) / 4 for 16th notes
-        let secondsPerBeat = 60.0 / bpm
-        let secondsPerStep = secondsPerBeat / 4.0
-
-        print("DSPEngine DEBUG TIMER: Starting with interval=\(secondsPerStep)s, stepCount=\(stepCount)")
-
-        debugTimer = Timer.scheduledTimer(withTimeInterval: secondsPerStep, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self = self else { return }
-
-                // Advance step
-                self.timerStep = (self.timerStep + 1) % stepCount
-                print("DSPEngine DEBUG TIMER: Step \(self.timerStep)")
-
-                // Call the callback
-                self.onStepAdvanced?(self.timerStep)
-
-                // Trigger voices for this step
-                self.triggerVoicesForStep(self.timerStep)
-            }
-        }
-
-        // Fire immediately for step 0
-        onStepAdvanced?(0)
-        triggerVoicesForStep(0)
-    }
-
-    /// Stops the debug timer
-    private func stopDebugTimer() {
-        debugTimer?.invalidate()
-        debugTimer = nil
-        timerStep = 0
-        print("DSPEngine DEBUG TIMER: Stopped")
-    }
-
-    /// Triggers voices for a step (called by debug timer)
-    private func triggerVoicesForStep(_ step: Int) {
-        let patternData = playbackState.patternData
-
-        // DEBUG: Log pattern data status
-        if step == 0 {
-            print("DSPEngine DEBUG: patternData has \(patternData.count) voices")
-            for (i, voiceSteps) in patternData.enumerated() {
-                let activeCount = voiceSteps.filter { $0.isActive }.count
-                if activeCount > 0 {
-                    print("DSPEngine DEBUG: Voice \(i) has \(activeCount) active steps out of \(voiceSteps.count)")
-                }
-            }
-        }
-
-        for (voiceIndex, voiceSteps) in patternData.enumerated() {
-            guard step < voiceSteps.count else { continue }
-
-            let stepData = voiceSteps[step]
-            guard stepData.isActive else { continue }
-
-            // Check probability
-            if stepData.probability < 1.0 {
-                let random = Float.random(in: 0...1)
-                if random > stepData.probability {
-                    continue
-                }
-            }
-
-            // Trigger the voice
-            voiceSynths[voiceIndex].trigger(velocity: stepData.velocity)
-            print("DSPEngine DEBUG TIMER: Triggered voice \(voiceIndex) at step \(step) with velocity \(stepData.velocity)")
-
-            // Notify UI
-            let voiceType = DrumVoiceType.allCases[voiceIndex]
-            onVoiceTriggered?(voiceType, stepData.velocity)
-        }
     }
 
     /// Update BPM during playback
@@ -335,10 +208,6 @@ final class DSPEngine {
 
     // MARK: - Audio Render (Audio Thread - Static)
 
-    // Debug counter for render callback tracing
-    private static var renderCallCount: Int = 0
-    private static var lastDebugPrintTime: Double = 0
-
     /// Main render callback - runs on audio thread
     /// MUST be lock-free and real-time safe
     private static func renderAudio(
@@ -352,67 +221,24 @@ final class DSPEngine {
     ) -> OSStatus {
         let ablPointer = UnsafeMutableAudioBufferListPointer(audioBufferList)
 
-        // DEBUG: Log buffer info once at startup
-        if renderCallCount == 0 {
-            print("DSPEngine RENDER: Buffer count=\(ablPointer.count), frameCount=\(frameCount)")
-            for (i, buf) in ablPointer.enumerated() {
-                print("DSPEngine RENDER: Buffer[\(i)] channels=\(buf.mNumberChannels) bytes=\(buf.mDataByteSize)")
-            }
-        }
+        // Determine buffer format
+        let isInterleaved = ablPointer.count == 1 && ablPointer[0].mNumberChannels == 2
+        let isNonInterleaved = ablPointer.count >= 2
 
-        guard ablPointer.count >= 2 else {
-            // Fallback: Try interleaved format if only 1 buffer
-            if ablPointer.count == 1 {
-                let interleavedBuffer = ablPointer[0].mData?.assumingMemoryBound(to: Float.self)
-                guard let buffer = interleavedBuffer else { return noErr }
-                let numChannels = Int(ablPointer[0].mNumberChannels)
-                if renderCallCount == 0 {
-                    print("DSPEngine RENDER: Using interleaved format with \(numChannels) channels")
-                }
-                // Handle interleaved format (silence for now, but log it)
-                for i in 0..<Int(frameCount) * numChannels {
-                    buffer[i] = 0
-                }
-            }
+        guard isInterleaved || isNonInterleaved else {
+            // Unknown format - output silence
             return noErr
         }
 
-        let leftBuffer = ablPointer[0].mData?.assumingMemoryBound(to: Float.self)
-        let rightBuffer = ablPointer[1].mData?.assumingMemoryBound(to: Float.self)
-
-        guard let left = leftBuffer, let right = rightBuffer else { return noErr }
-
-        // If test tone mode, output a simple sine wave and return
-        if useTestTone {
-            for i in 0..<Int(frameCount) {
-                let sample = sinf(testTonePhase * 2.0 * .pi) * 0.3
-                left[i] = sample
-                right[i] = sample
-                testTonePhase += 440.0 / Float(sampleRate) // 440 Hz test tone
-                if testTonePhase >= 1.0 { testTonePhase -= 1.0 }
-            }
-            if renderCallCount % 86 == 0 {
-                print("DSPEngine TEST TONE: Outputting 440Hz sine wave")
-            }
-            return noErr
+        // Try to apply any pending parameter updates (non-blocking)
+        // This is called once per buffer, not per sample, for efficiency
+        for synth in synths {
+            synth.tryApplyPendingParameters()
         }
 
-        // Clear buffers
-        for i in 0..<Int(frameCount) {
-            left[i] = 0
-            right[i] = 0
-        }
-
-        // If not playing, just output silence (but still render active voices)
         let isPlaying = state.isPlaying
         let bpm = state.bpm
         let stepCount = state.stepCount
-
-        // DEBUG: Log render callback status periodically (every ~1 second)
-        renderCallCount += 1
-        if renderCallCount % 86 == 0 { // ~1 second at 512 samples/buffer, 44100 Hz
-            print("DSPEngine RENDER: isPlaying=\(isPlaying), bpm=\(bpm), stepCount=\(stepCount), samplePos=\(state.samplePosition), currentStep=\(state.currentStep)")
-        }
 
         // Calculate samples per step (16th note)
         // At 120 BPM: 60/120 = 0.5 sec per beat, /4 = 0.125 sec per 16th
@@ -436,9 +262,6 @@ final class DSPEngine {
                 if currentStepIndex != previousStepIndex {
                     state.currentStep = currentStepIndex
 
-                    // DEBUG: Log step changes
-                    print("DSPEngine STEP CHANGE: \(previousStepIndex) -> \(currentStepIndex)")
-
                     // Trigger voices for this step
                     triggerStepVoices(
                         state: state,
@@ -457,7 +280,6 @@ final class DSPEngine {
             // Render all voice synths (even when not playing, to finish decaying sounds)
             var leftSample: Float = 0
             var rightSample: Float = 0
-            var maxSample: Float = 0
 
             for (voiceIndex, synth) in synths.enumerated() {
                 // Check mute/solo
@@ -469,6 +291,10 @@ final class DSPEngine {
 
                 if shouldPlay {
                     let sample = synth.renderSample(sampleRate: Float(sampleRate))
+
+                    // Skip this voice if it produced invalid output
+                    guard sample.isFinite else { continue }
+
                     let volume = state.voiceVolumes[voiceIndex]
                     let pan = state.voicePans[voiceIndex]
 
@@ -478,17 +304,25 @@ final class DSPEngine {
 
                     leftSample += sample * leftGain
                     rightSample += sample * rightGain
-                    maxSample = max(maxSample, abs(sample))
                 }
             }
 
             // Soft clip to prevent harsh distortion
-            left[frameIndex] = softClip(leftSample)
-            right[frameIndex] = softClip(rightSample)
+            let clippedLeft = softClip(leftSample)
+            let clippedRight = softClip(rightSample)
 
-            // DEBUG: Log if we're producing audio (once per buffer)
-            if frameIndex == 0 && maxSample > 0.001 {
-                print("DSPEngine RENDER: Producing audio! maxSample=\(maxSample)")
+            // Write to buffer based on format
+            if isInterleaved {
+                // Interleaved: L0 R0 L1 R1 L2 R2 ...
+                let buffer = ablPointer[0].mData!.assumingMemoryBound(to: Float.self)
+                buffer[frameIndex * 2] = clippedLeft
+                buffer[frameIndex * 2 + 1] = clippedRight
+            } else {
+                // Non-interleaved: separate L and R buffers
+                let left = ablPointer[0].mData!.assumingMemoryBound(to: Float.self)
+                let right = ablPointer[1].mData!.assumingMemoryBound(to: Float.self)
+                left[frameIndex] = clippedLeft
+                right[frameIndex] = clippedRight
             }
         }
 
@@ -598,35 +432,125 @@ private struct StepTriggerData: Sendable {
     let nudge: Float
 }
 
+// MARK: - Synth Parameters (Thread-Safe)
+
+/// Parameters that can be updated from the main thread.
+/// This struct is copied atomically to ensure thread safety.
+private struct SynthParameters: @unchecked Sendable {
+    // Oscillator
+    var basePitch: Float = 0.5
+    var pitchEnvAmount: Float = 0.8
+    var pitchEnvDecay: Float = 0.15
+    var toneMix: Float = 0.0
+
+    // ADSR envelope
+    var attack: Float = 0.001
+    var hold: Float = 0.0
+    var decay: Float = 0.5
+    var sustain: Float = 0.0
+    var release: Float = 0.1
+
+    // Filter
+    var filterType: Int = 0  // 0=LP, 1=HP, 2=BP
+    var filterCutoff: Float = 1.0
+    var filterResonance: Float = 0.0
+    var filterEnvAmount: Float = 0.0
+
+    // Effects
+    var drive: Float = 0.0
+    var bitcrush: Float = 0.0
+
+    /// Creates parameters from a Voice model
+    init(from voice: Voice) {
+        basePitch = voice.pitch
+        pitchEnvAmount = voice.pitchEnvelopeAmount
+        pitchEnvDecay = voice.pitchEnvelopeDecay
+        toneMix = voice.toneMix
+        attack = voice.attack
+        hold = voice.hold
+        decay = voice.decay
+        sustain = voice.sustain
+        release = voice.release
+        filterType = voice.filterType.ordinal
+        filterCutoff = voice.filterCutoff
+        filterResonance = voice.filterResonance
+        filterEnvAmount = voice.filterEnvelopeAmount
+        drive = voice.drive
+        bitcrush = voice.bitcrush
+    }
+
+    init() {}
+}
+
 // MARK: - Drum Voice Synthesizer
 
-/// Simple drum synthesizer for a single voice
+/// Drum synthesizer with full ADSR, resonant filter, and effects.
+/// Thread-safe: parameters are updated via lock-protected snapshot.
 private final class DrumVoiceSynth: @unchecked Sendable {
     let voiceType: DrumVoiceType
 
-    // Envelope state
+    // MARK: - Thread Safety
+
+    /// Lock for parameter updates (main thread writes, audio thread tries to read)
+    private var parameterLock = os_unfair_lock()
+
+    /// Pending parameters (written by main thread, protected by lock)
+    private var pendingParameters = SynthParameters()
+
+    /// Active parameters (used by audio thread, copied from pending when lock acquired)
+    private var activeParameters = SynthParameters()
+
+    /// Flag indicating pending parameters are available
+    private var hasPendingUpdate: Bool = false
+
+    // MARK: - Envelope State (Audio thread only)
+
     private var isPlaying: Bool = false
-    private var envelopePhase: Float = 0
+    private var envelopeTime: Float = 0      // Time within current envelope stage
+    private var totalPlayTime: Float = 0      // Total time since trigger (for pitch envelope)
+    private var envelopeStage: EnvelopeStage = .idle
+    private var envelopeLevel: Float = 0
     private var velocity: Float = 1.0
 
-    // Oscillator state
+    // MARK: - Oscillator State (Audio thread only)
+
     private var phase: Float = 0
     private var currentPitch: Float = 0
 
-    // Parameters (updated from Voice)
-    private var basePitch: Float = 0.5
-    private var pitchEnvAmount: Float = 0.8
-    private var pitchEnvDecay: Float = 0.15
-    private var ampDecay: Float = 0.5
-    private var toneMix: Float = 0.0
-    private var filterCutoff: Float = 1.0
-    private var drive: Float = 0.0
+    // MARK: - Snare-specific State (Audio thread only)
 
-    // Simple one-pole lowpass filter state
-    private var filterState: Float = 0
+    /// Second oscillator phase for snare body (330Hz component)
+    private var snarePhase2: Float = 0
 
-    // Output level for metering
+    /// Separate envelope for snare body low frequency (180Hz) - longer decay
+    private var snareBodyEnvLow: Float = 0
+
+    /// Separate envelope for snare body high frequency (330Hz) - shorter decay
+    private var snareBodyEnvHigh: Float = 0
+
+    /// Snare noise bandpass filter state (for snare wire simulation)
+    private var snareNoiseBpLow: Float = 0
+    private var snareNoiseBpBand: Float = 0
+
+    // MARK: - Filter State (Audio thread only)
+
+    private var svfLow: Float = 0
+    private var svfBand: Float = 0
+    private var svfHigh: Float = 0
+
+    // MARK: - Bitcrush State (Audio thread only)
+
+    private var crushHoldSample: Float = 0
+    private var crushPhase: Float = 0
+
+    // MARK: - Metering
+
+    /// Output level for metering (can be read from main thread)
     var currentLevel: Float = 0
+
+    private enum EnvelopeStage {
+        case idle, attack, hold, decay, sustain, release
+    }
 
     init(voiceType: DrumVoiceType) {
         self.voiceType = voiceType
@@ -634,112 +558,226 @@ private final class DrumVoiceSynth: @unchecked Sendable {
     }
 
     private func applyDefaultsForVoiceType() {
+        var params = SynthParameters()
+
         switch voiceType {
         case .kick:
-            basePitch = 0.3
-            pitchEnvAmount = 0.8
-            pitchEnvDecay = 0.15
-            ampDecay = 0.6
-            toneMix = 0.0
+            params.basePitch = 0.3
+            params.pitchEnvAmount = 0.8
+            params.pitchEnvDecay = 0.15
+            params.toneMix = 0.0
+            params.filterType = 0
+            params.filterCutoff = 0.7
+            params.filterResonance = 0.1
+            params.attack = 0.001
+            params.decay = 0.5
+            params.drive = 0.1
 
         case .snare:
-            basePitch = 0.5
-            pitchEnvAmount = 0.3
-            pitchEnvDecay = 0.1
-            ampDecay = 0.35
-            toneMix = 0.5
+            // TR-808/909 style snare defaults
+            // basePitch: 0.5 = 180Hz/330Hz body frequencies (0=126Hz/231Hz, 1=234Hz/429Hz)
+            params.basePitch = 0.5
+            // Pitch envelope: subtle sweep for attack "thwack"
+            params.pitchEnvAmount = 0.25
+            params.pitchEnvDecay = 0.1
+            // toneMix: 0.5 = balanced body/snare wires (0=all body, 1=all wires)
+            params.toneMix = 0.5
+            // Filter: lowpass to shape overall tone
+            params.filterType = 0
+            params.filterCutoff = 0.9
+            params.filterEnvAmount = 0.15
+            params.filterResonance = 0.1
+            // Envelope: fast attack, medium decay for snare character
+            params.attack = 0.001
+            params.decay = 0.4
+            params.sustain = 0.0
+            params.release = 0.08
+            // Light drive for analog warmth
+            params.drive = 0.12
 
         case .closedHat:
-            basePitch = 0.7
-            ampDecay = 0.1
-            toneMix = 0.9
-            filterCutoff = 0.8
+            params.basePitch = 0.7
+            params.pitchEnvAmount = 0.0
+            params.toneMix = 0.95
+            params.filterType = 1
+            params.filterCutoff = 0.6
+            params.filterResonance = 0.15
+            params.attack = 0.001
+            params.decay = 0.15
+            params.release = 0.02
 
         case .openHat:
-            basePitch = 0.7
-            ampDecay = 0.5
-            toneMix = 0.9
-            filterCutoff = 0.8
+            params.basePitch = 0.7
+            params.pitchEnvAmount = 0.0
+            params.toneMix = 0.95
+            params.filterType = 1
+            params.filterCutoff = 0.55
+            params.filterResonance = 0.2
+            params.attack = 0.001
+            params.decay = 0.55
+            params.release = 0.1
 
         case .clap:
-            basePitch = 0.6
-            ampDecay = 0.25
-            toneMix = 0.8
+            params.basePitch = 0.6
+            params.pitchEnvAmount = 0.0
+            params.toneMix = 0.85
+            params.filterType = 2
+            params.filterCutoff = 0.65
+            params.filterResonance = 0.25
+            params.filterEnvAmount = 0.15
+            params.attack = 0.005
+            params.decay = 0.3
+            params.drive = 0.1
 
         case .cowbell:
-            basePitch = 0.65
-            ampDecay = 0.4
-            toneMix = 0.1
+            params.basePitch = 0.65
+            params.pitchEnvAmount = 0.05
+            params.pitchEnvDecay = 0.02
+            params.toneMix = 0.1
+            params.filterType = 2
+            params.filterCutoff = 0.75
+            params.filterResonance = 0.35
+            params.attack = 0.001
+            params.decay = 0.45
+            params.drive = 0.2
 
         case .cymbal:
-            basePitch = 0.8
-            ampDecay = 0.7
-            toneMix = 0.95
-            filterCutoff = 0.9
+            params.basePitch = 0.8
+            params.pitchEnvAmount = 0.0
+            params.toneMix = 0.98
+            params.filterType = 1
+            params.filterCutoff = 0.5
+            params.filterResonance = 0.1
+            params.filterEnvAmount = -0.15
+            params.attack = 0.005
+            params.decay = 0.75
+            params.release = 0.2
 
         case .conga:
-            basePitch = 0.45
-            pitchEnvAmount = 0.4
-            pitchEnvDecay = 0.08
-            ampDecay = 0.4
-            toneMix = 0.0
+            params.basePitch = 0.45
+            params.pitchEnvAmount = 0.4
+            params.pitchEnvDecay = 0.06
+            params.toneMix = 0.0
+            params.filterType = 0
+            params.filterCutoff = 0.8
+            params.filterResonance = 0.2
+            params.filterEnvAmount = 0.1
+            params.attack = 0.001
+            params.decay = 0.4
+            params.drive = 0.05
 
         case .maracas:
-            basePitch = 0.9
-            ampDecay = 0.08
-            toneMix = 1.0
-            filterCutoff = 0.6
+            params.basePitch = 0.9
+            params.pitchEnvAmount = 0.0
+            params.toneMix = 1.0
+            params.filterType = 1
+            params.filterCutoff = 0.7
+            params.attack = 0.001
+            params.decay = 0.1
+            params.release = 0.02
 
         case .tom:
-            basePitch = 0.4
-            pitchEnvAmount = 0.5
-            pitchEnvDecay = 0.12
-            ampDecay = 0.5
-            toneMix = 0.0
+            params.basePitch = 0.4
+            params.pitchEnvAmount = 0.5
+            params.pitchEnvDecay = 0.1
+            params.toneMix = 0.0
+            params.filterType = 0
+            params.filterCutoff = 0.75
+            params.filterResonance = 0.15
+            params.filterEnvAmount = 0.1
+            params.attack = 0.001
+            params.decay = 0.5
+            params.drive = 0.1
         }
+
+        // Set both pending and active (called during init, no contention)
+        pendingParameters = params
+        activeParameters = params
     }
 
-    /// Update synthesis parameters from Voice model
+    /// Update synthesis parameters from Voice model (called from main thread)
+    /// Thread-safe: uses lock to protect parameter updates
     func updateParameters(from voice: Voice) {
-        basePitch = voice.pitch
-        pitchEnvAmount = voice.pitchEnvelopeAmount
-        pitchEnvDecay = voice.pitchEnvelopeDecay
-        ampDecay = voice.decay
-        toneMix = voice.toneMix
-        filterCutoff = voice.filterCutoff
-        drive = voice.drive
+        let newParams = SynthParameters(from: voice)
+
+        os_unfair_lock_lock(&parameterLock)
+        pendingParameters = newParams
+        hasPendingUpdate = true
+        os_unfair_lock_unlock(&parameterLock)
+    }
+
+    /// Try to apply pending parameter updates (called from audio thread)
+    /// Non-blocking: uses try-lock so audio thread never waits
+    func tryApplyPendingParameters() {
+        // Try to acquire lock without blocking
+        guard os_unfair_lock_trylock(&parameterLock) else {
+            // Lock not available, use existing activeParameters
+            return
+        }
+
+        // Lock acquired - check if we have pending updates
+        if hasPendingUpdate {
+            activeParameters = pendingParameters
+            hasPendingUpdate = false
+        }
+
+        os_unfair_lock_unlock(&parameterLock)
     }
 
     /// Trigger the voice
     func trigger(velocity: Float) {
         self.velocity = velocity
-        self.envelopePhase = 0
+        self.envelopeTime = 0
+        self.totalPlayTime = 0
+        self.envelopeStage = .attack
+        self.envelopeLevel = 0
         self.phase = 0
         self.isPlaying = true
+        // Reset filter state on trigger for punch
+        self.svfLow = 0
+        self.svfBand = 0
+        self.svfHigh = 0
+
+        // Reset snare-specific state
+        if voiceType == .snare {
+            self.snarePhase2 = 0
+            self.snareBodyEnvLow = 1.0   // Start at full level
+            self.snareBodyEnvHigh = 1.0  // Start at full level
+            self.snareNoiseBpLow = 0
+            self.snareNoiseBpBand = 0
+        }
     }
 
-    /// Render a single sample
+    /// Render a single sample (called from audio thread)
     func renderSample(sampleRate: Float) -> Float {
         guard isPlaying else {
             currentLevel = 0
             return 0
         }
 
-        // Calculate frequencies based on voice type
-        let baseFreq = frequencyForVoice()
+        // Use specialized rendering for snare drum
+        if voiceType == .snare {
+            return renderSnareSample(sampleRate: sampleRate)
+        }
 
-        // Pitch envelope (exponential decay)
-        let pitchEnvTime = max(0.001, pitchEnvDecay * 0.5) // 0-0.5 seconds
-        let pitchEnv = expf(-envelopePhase / pitchEnvTime)
-        let pitchMod = 1.0 + pitchEnvAmount * pitchEnv * 4.0 // Up to 5x frequency
+        // Use thread-safe active parameters
+        let params = activeParameters
+        let dt = 1.0 / sampleRate
+
+        // Calculate frequencies based on voice type
+        let baseFreq = frequencyForVoice(basePitch: params.basePitch)
+
+        // Pitch envelope (exponential decay from trigger start, not envelope stage)
+        let pitchEnvTime = max(0.001, params.pitchEnvDecay * 0.5)
+        let pitchEnv = expf(-totalPlayTime / pitchEnvTime)
+        let pitchMod = 1.0 + params.pitchEnvAmount * pitchEnv * 4.0
         currentPitch = baseFreq * pitchMod
 
-        // Amplitude envelope (exponential decay)
-        let ampDecayTime = max(0.001, ampDecay * 1.5) // 0-1.5 seconds
-        let ampEnv = expf(-envelopePhase / ampDecayTime)
+        // ADSR Envelope
+        let ampEnv = processEnvelope(dt: dt, params: params)
 
-        // Check if envelope has decayed enough to stop
-        if ampEnv < 0.001 {
+        // Check if envelope finished
+        if envelopeStage == .idle {
             isPlaying = false
             currentLevel = 0
             return 0
@@ -749,31 +787,31 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         var output: Float = 0
 
         // Tone component (sine wave)
-        let toneAmount = 1.0 - toneMix
+        let toneAmount = 1.0 - params.toneMix
         if toneAmount > 0.01 {
             let sine = sinf(phase * 2.0 * .pi)
             output += sine * toneAmount
         }
 
         // Noise component
-        let noiseAmount = toneMix
+        let noiseAmount = params.toneMix
         if noiseAmount > 0.01 {
             let noise = Float.random(in: -1...1)
             output += noise * noiseAmount
         }
 
-        // Simple one-pole lowpass filter
-        let cutoffFreq = 100 + filterCutoff * 15000 // 100Hz - 15100Hz
-        let rc = 1.0 / (cutoffFreq * 2.0 * .pi)
-        let dt = 1.0 / sampleRate
-        let alpha = dt / (rc + dt)
-        filterState = filterState + alpha * (output - filterState)
-        output = filterState
+        // State-variable filter with resonance
+        output = processFilter(input: output, sampleRate: sampleRate, envLevel: ampEnv, params: params)
 
         // Apply drive/saturation
-        if drive > 0.01 {
-            let driveAmount = 1.0 + drive * 10.0
+        if params.drive > 0.01 {
+            let driveAmount = 1.0 + params.drive * 10.0
             output = tanhf(output * driveAmount) / tanhf(driveAmount)
+        }
+
+        // Apply bitcrush
+        if params.bitcrush > 0.01 {
+            output = processBitcrush(input: output, sampleRate: sampleRate, bitcrush: params.bitcrush)
         }
 
         // Apply envelope and velocity
@@ -785,8 +823,18 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             phase -= 1.0
         }
 
-        // Update envelope time
-        envelopePhase += 1.0 / sampleRate
+        // Update envelope times
+        envelopeTime += dt
+        totalPlayTime += dt
+
+        // Protect against NaN/Inf from any stage
+        if !output.isFinite {
+            output = 0
+            // Reset filter state to recover
+            svfLow = 0
+            svfBand = 0
+            svfHigh = 0
+        }
 
         // Update level for metering
         currentLevel = abs(output)
@@ -794,36 +842,291 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         return output
     }
 
+    // MARK: - Snare Drum Synthesis (TR-808/909 Style)
+
+    /// Specialized snare drum rendering using dual-oscillator body + bandpass filtered noise
+    /// Based on TR-808/909 snare synthesis architecture:
+    /// - Two sine oscillators at ~180Hz and ~330Hz (drum body modes)
+    /// - Separate envelopes for each body oscillator (low freq decays slower)
+    /// - Bandpass filtered white noise for snare wire simulation
+    /// - toneMix controls body vs snare wire balance
+    private func renderSnareSample(sampleRate: Float) -> Float {
+        let params = activeParameters
+        let dt = 1.0 / sampleRate
+
+        // Overall amplitude envelope (controls final output)
+        let ampEnv = processEnvelope(dt: dt, params: params)
+
+        // Check if envelope finished
+        if envelopeStage == .idle {
+            isPlaying = false
+            currentLevel = 0
+            return 0
+        }
+
+        // === SNARE BODY (Dual Oscillator) ===
+
+        // Base frequencies for snare body - TR-808/909 style
+        // The pitch parameter modulates these proportionally
+        let pitchMod = 0.7 + params.basePitch * 0.6  // 0.7 - 1.3 multiplier
+        let freq1: Float = 180.0 * pitchMod  // Low body mode (~180Hz)
+        let freq2: Float = 330.0 * pitchMod  // High body mode (~330Hz, non-harmonic)
+
+        // Pitch envelope for initial "thwack" - fast pitch drop on attack
+        let pitchEnvTime = max(0.005, params.pitchEnvDecay * 0.15)  // Faster for snare
+        let pitchEnv = expf(-totalPlayTime / pitchEnvTime)
+        let pitchSweep = 1.0 + params.pitchEnvAmount * pitchEnv * 2.0  // Less extreme than kick
+
+        // Apply pitch envelope to both oscillators
+        let actualFreq1 = freq1 * pitchSweep
+        let actualFreq2 = freq2 * pitchSweep
+
+        // Separate envelope decay for each body oscillator
+        // Low frequency (180Hz): Longer decay - provides body/weight
+        // High frequency (330Hz): Shorter decay - provides attack/snap (0,1 mode decays 2x faster)
+        let bodyDecayBase = max(0.02, params.decay * 0.4)  // 20-400ms range for snare body
+        let lowDecayTime = bodyDecayBase * 1.2   // Low mode: slightly longer
+        let highDecayTime = bodyDecayBase * 0.6  // High mode: faster decay (2x ratio)
+
+        snareBodyEnvLow *= expf(-dt / lowDecayTime)
+        snareBodyEnvHigh *= expf(-dt / highDecayTime)
+
+        // Generate body oscillators (sine waves)
+        let body1 = sinf(phase * 2.0 * .pi) * snareBodyEnvLow
+        let body2 = sinf(snarePhase2 * 2.0 * .pi) * snareBodyEnvHigh * 0.7  // High mode slightly quieter
+
+        // Mix body oscillators
+        let bodyMix = (body1 + body2) * 0.6
+
+        // === SNARE WIRES (Bandpass Filtered Noise) ===
+
+        // Generate white noise
+        let noise = Float.random(in: -1...1)
+
+        // Bandpass filter for snare wire character (centered around 4kHz)
+        // Snare wires have energy mainly in the 3-5kHz range
+        let snareWireCenterFreq: Float = 4000.0 + params.basePitch * 2000.0  // 4-6kHz
+        let snareWireQ: Float = 1.5 + params.filterResonance * 2.0  // Moderate Q
+
+        // State-variable filter for bandpass (Chamberlin form)
+        let normalizedFreq = min(snareWireCenterFreq, sampleRate * 0.4) / sampleRate
+        let f = 2.0 * sinf(.pi * normalizedFreq)
+        let damping = 1.0 / snareWireQ
+
+        snareNoiseBpLow = snareNoiseBpLow + f * snareNoiseBpBand
+        let snareNoiseBpHigh = noise - snareNoiseBpLow - damping * snareNoiseBpBand
+        snareNoiseBpBand = f * snareNoiseBpHigh + snareNoiseBpBand
+
+        // Prevent filter instability
+        if !snareNoiseBpLow.isFinite { snareNoiseBpLow = 0 }
+        if !snareNoiseBpBand.isFinite { snareNoiseBpBand = 0 }
+
+        // Snare wire envelope (slightly longer than body for "rattle" effect)
+        let snareWireDecay = max(0.03, params.decay * 0.5)  // 30-500ms
+        let snareWireEnv = expf(-totalPlayTime / snareWireDecay)
+
+        // Use bandpass output for snare wires
+        let snareWires = snareNoiseBpBand * snareWireEnv * 1.2
+
+        // === MIX BODY AND SNARE WIRES ===
+
+        // toneMix: 0 = all body, 1 = all snare wires
+        // Classic snare is usually 40-60% noise
+        let bodyAmount = 1.0 - params.toneMix
+        let snareAmount = params.toneMix
+
+        var output = bodyMix * bodyAmount + snareWires * snareAmount
+
+        // === POST-PROCESSING ===
+
+        // Apply main filter (user-controllable tone shaping)
+        output = processFilter(input: output, sampleRate: sampleRate, envLevel: ampEnv, params: params)
+
+        // Apply drive/saturation for grit
+        if params.drive > 0.01 {
+            let driveAmount = 1.0 + params.drive * 8.0
+            output = tanhf(output * driveAmount) / tanhf(driveAmount)
+        }
+
+        // Apply bitcrush if enabled
+        if params.bitcrush > 0.01 {
+            output = processBitcrush(input: output, sampleRate: sampleRate, bitcrush: params.bitcrush)
+        }
+
+        // Apply overall amplitude envelope and velocity
+        output *= ampEnv * velocity
+
+        // Update oscillator phases
+        phase += actualFreq1 / sampleRate
+        if phase >= 1.0 { phase -= 1.0 }
+
+        snarePhase2 += actualFreq2 / sampleRate
+        if snarePhase2 >= 1.0 { snarePhase2 -= 1.0 }
+
+        // Update envelope times
+        envelopeTime += dt
+        totalPlayTime += dt
+
+        // Protect against NaN/Inf
+        if !output.isFinite {
+            output = 0
+            svfLow = 0
+            svfBand = 0
+            svfHigh = 0
+            snareNoiseBpLow = 0
+            snareNoiseBpBand = 0
+        }
+
+        // Update level for metering
+        currentLevel = abs(output)
+
+        return output
+    }
+
+    /// Process ADSR envelope
+    private func processEnvelope(dt: Float, params: SynthParameters) -> Float {
+        switch envelopeStage {
+        case .idle:
+            return 0
+
+        case .attack:
+            let attackTime = max(0.001, params.attack * 1.0) // 0-1 second
+            envelopeLevel += dt / attackTime
+            if envelopeLevel >= 1.0 {
+                envelopeLevel = 1.0
+                envelopeStage = params.hold > 0.001 ? .hold : .decay
+                envelopeTime = 0
+            }
+            return envelopeLevel
+
+        case .hold:
+            let holdTime = params.hold * 0.5 // 0-0.5 seconds
+            if envelopeTime >= holdTime {
+                envelopeStage = .decay
+                envelopeTime = 0
+            }
+            return 1.0
+
+        case .decay:
+            // Decay time maps 0-1 to 20ms - 3000ms total decay time
+            // Using a curve that provides more resolution at shorter decay times
+            let minDecay: Float = 0.02  // 20ms minimum
+            let maxDecay: Float = 3.0   // 3 seconds maximum
+            let totalDecayTime = minDecay + params.decay * params.decay * (maxDecay - minDecay)
+            // Time constant for exponential decay (reaches ~5% at totalDecayTime)
+            let timeConstant = totalDecayTime / 3.0
+
+            let target = params.sustain
+            envelopeLevel = target + (1.0 - target) * expf(-envelopeTime / timeConstant)
+
+            // For drums (one-shot), transition to release when envelope reaches sustain level
+            // This ensures the sound eventually stops even with sustain > 0
+            if envelopeLevel <= target + 0.01 || envelopeTime > totalDecayTime * 1.5 {
+                envelopeLevel = target
+                envelopeStage = .release
+                envelopeTime = 0
+            }
+            return envelopeLevel
+
+        case .sustain:
+            // For drums, we don't hold at sustain - immediately go to release
+            // This case is kept for compatibility but shouldn't normally be reached
+            envelopeStage = .release
+            envelopeTime = 0
+            return envelopeLevel
+
+        case .release:
+            let releaseTime = max(0.001, params.release * 1.0) // 0-1 second
+            envelopeLevel *= expf(-dt / releaseTime)
+            if envelopeLevel < 0.001 {
+                envelopeStage = .idle
+                return 0
+            }
+            return envelopeLevel
+        }
+    }
+
+    /// State-variable filter with resonance and filter type switching
+    private func processFilter(input: Float, sampleRate: Float, envLevel: Float, params: SynthParameters) -> Float {
+        // Calculate cutoff frequency with envelope modulation
+        var cutoffMod = params.filterCutoff
+        if abs(params.filterEnvAmount) > 0.01 {
+            cutoffMod += params.filterEnvAmount * envLevel
+            cutoffMod = max(0, min(1, cutoffMod))
+        }
+
+        // Map cutoff to frequency (20Hz - 20kHz logarithmic)
+        let minFreq: Float = 20.0
+        let maxFreq: Float = 20000.0
+        let cutoffFreq = minFreq * powf(maxFreq / minFreq, cutoffMod)
+
+        // Calculate filter coefficients
+        // f = 2 * sin(pi * Fc / Fs), clamped for stability
+        let normalizedFreq = min(cutoffFreq, sampleRate * 0.4) / sampleRate
+        let f = 2.0 * sinf(.pi * normalizedFreq)
+
+        // Q factor: 0.5 (no resonance) to 10 (high resonance)
+        // Damping = 1/Q
+        let q = 0.5 + params.filterResonance * 9.5
+        let damping = 1.0 / q
+
+        // State-variable filter iteration (Chamberlin form)
+        svfLow = svfLow + f * svfBand
+        svfHigh = input - svfLow - damping * svfBand
+        svfBand = f * svfHigh + svfBand
+
+        // Prevent filter instability (NaN/Inf protection)
+        if !svfLow.isFinite { svfLow = 0 }
+        if !svfBand.isFinite { svfBand = 0 }
+        if !svfHigh.isFinite { svfHigh = 0 }
+
+        // Select output based on filter type
+        switch params.filterType {
+        case 0: return svfLow   // Lowpass
+        case 1: return svfHigh  // Highpass
+        case 2: return svfBand  // Bandpass
+        default: return svfLow
+        }
+    }
+
+    /// Bitcrush effect (sample rate and bit depth reduction)
+    private func processBitcrush(input: Float, sampleRate: Float, bitcrush: Float) -> Float {
+        // Sample rate reduction (1 = full rate, 0.01 = very crushed)
+        let crushRate = 1.0 - bitcrush * 0.98
+        crushPhase += crushRate
+
+        if crushPhase >= 1.0 {
+            crushPhase -= 1.0
+            // Bit depth reduction
+            let bits = max(2, Int(16 - bitcrush * 14)) // 16 to 2 bits
+            let levels = Float(1 << bits)
+            crushHoldSample = floorf(input * levels) / levels
+        }
+
+        return crushHoldSample
+    }
+
     /// Calculate base frequency for this voice type
-    private func frequencyForVoice() -> Float {
+    private func frequencyForVoice(basePitch: Float) -> Float {
         switch voiceType {
         case .kick:
-            // 40-80 Hz
-            return 40 + basePitch * 40
+            return 40 + basePitch * 40        // 40-80 Hz
         case .snare:
-            // 150-250 Hz
-            return 150 + basePitch * 100
+            return 150 + basePitch * 100      // 150-250 Hz
         case .closedHat, .openHat:
-            // 6000-12000 Hz (mostly noise)
-            return 6000 + basePitch * 6000
+            return 6000 + basePitch * 6000    // 6-12 kHz (mostly noise)
         case .clap:
-            // 1000-3000 Hz
-            return 1000 + basePitch * 2000
+            return 1000 + basePitch * 2000    // 1-3 kHz
         case .cowbell:
-            // 500-1000 Hz
-            return 500 + basePitch * 500
+            return 500 + basePitch * 500      // 500-1000 Hz
         case .cymbal:
-            // 5000-10000 Hz
-            return 5000 + basePitch * 5000
+            return 5000 + basePitch * 5000    // 5-10 kHz
         case .conga:
-            // 150-300 Hz
-            return 150 + basePitch * 150
+            return 150 + basePitch * 150      // 150-300 Hz
         case .maracas:
-            // 8000-15000 Hz (mostly noise)
-            return 8000 + basePitch * 7000
+            return 8000 + basePitch * 7000    // 8-15 kHz (mostly noise)
         case .tom:
-            // 80-200 Hz
-            return 80 + basePitch * 120
+            return 80 + basePitch * 120       // 80-200 Hz
         }
     }
 }

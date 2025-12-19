@@ -16,24 +16,25 @@ struct UIVoiceEditor: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: UISpacing.xl) {
+            VStack(spacing: UISpacing.lg) {
                 // Header
                 header
 
-                // Oscillator section
-                oscillatorSection
+                // Two-column layout for sections
+                HStack(alignment: .top, spacing: UISpacing.lg) {
+                    // Left column
+                    VStack(spacing: UISpacing.lg) {
+                        oscillatorSection
+                        filterSection
+                        effectsSection
+                    }
 
-                // Filter section
-                filterSection
-
-                // Envelope section
-                envelopeSection
-
-                // Effects section
-                effectsSection
-
-                // Output section
-                outputSection
+                    // Right column
+                    VStack(spacing: UISpacing.lg) {
+                        envelopeSection
+                        outputSection
+                    }
+                }
             }
             .padding(UISpacing.lg)
         }
@@ -74,54 +75,56 @@ struct UIVoiceEditor: View {
     // MARK: - Oscillator Section
 
     private var oscillatorSection: some View {
-        VStack(alignment: .leading, spacing: UISpacing.md) {
-            sectionHeader("OSCILLATOR")
-
-            HStack(spacing: UISpacing.xl) {
-                UIKnob(
+        sectionPanel(title: "OSCILLATOR", color: voiceType.color) {
+            VStack(spacing: UISpacing.sm) {
+                ParameterSlider(
                     value: binding(\.pitch),
                     label: "Pitch",
-                    accentColor: voiceType.color
+                    accentColor: voiceType.color,
+                    valueFormatter: { String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.5
                 )
 
-                UIBipolarKnob(
+                BipolarSlider(
                     value: binding(\.pitchEnvelopeAmount),
                     label: "Pitch Env",
-                    accentColor: voiceType.color
+                    accentColor: voiceType.color,
+                    defaultValue: 0.0
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.pitchEnvelopeDecay),
                     label: "P.Env Decay",
-                    accentColor: voiceType.color
+                    accentColor: voiceType.color,
+                    valueFormatter: { String(format: "%.0fms", $0 * 500) },
+                    defaultValue: 0.3
                 )
 
                 // Tone/Noise mix (for voices that support it)
                 if supportsToneMix {
-                    UIKnob(
+                    ParameterSlider(
                         value: binding(\.toneMix),
                         label: "Tone/Noise",
                         accentColor: voiceType.color,
-                        valueFormatter: { $0 < 0.5 ? "Tone" : ($0 > 0.5 ? "Noise" : "50/50") }
+                        valueFormatter: { $0 < 0.3 ? "Tone" : ($0 > 0.7 ? "Noise" : "Mix") },
+                        defaultValue: 0.5
                     )
                 }
             }
         }
-        .panelStyle()
-        .padding(UISpacing.md)
     }
 
     // MARK: - Filter Section
 
     private var filterSection: some View {
-        VStack(alignment: .leading, spacing: UISpacing.md) {
-            sectionHeader("FILTER")
-
-            HStack(spacing: UISpacing.xl) {
+        sectionPanel(title: "FILTER", color: UIColors.accentMagenta) {
+            VStack(spacing: UISpacing.sm) {
                 // Filter type picker
-                VStack(spacing: UISpacing.xs) {
+                HStack {
                     Text("Type")
-                        .labelStyle()
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(UIColors.textSecondary)
+                        .frame(width: 70, alignment: .leading)
 
                     Picker("Filter Type", selection: binding(\.filterType)) {
                         ForEach(FilterType.allCases, id: \.self) { type in
@@ -129,155 +132,193 @@ struct UIVoiceEditor: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 100)
                 }
+                .frame(height: 24)
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.filterCutoff),
                     label: "Cutoff",
-                    accentColor: UIColors.accentMagenta
+                    accentColor: UIColors.accentMagenta,
+                    valueFormatter: { String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 1.0
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.filterResonance),
                     label: "Resonance",
-                    accentColor: UIColors.accentMagenta
+                    accentColor: UIColors.accentMagenta,
+                    valueFormatter: { String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.0
                 )
 
-                UIBipolarKnob(
+                BipolarSlider(
                     value: binding(\.filterEnvelopeAmount),
                     label: "Filter Env",
-                    accentColor: UIColors.accentMagenta
+                    accentColor: UIColors.accentMagenta,
+                    defaultValue: 0.0
                 )
             }
         }
-        .panelStyle()
-        .padding(UISpacing.md)
     }
 
     // MARK: - Envelope Section
 
     private var envelopeSection: some View {
-        VStack(alignment: .leading, spacing: UISpacing.md) {
-            sectionHeader("AMP ENVELOPE")
-
-            HStack(spacing: UISpacing.xl) {
-                UIKnob(
+        sectionPanel(title: "AMP ENVELOPE", color: UIColors.accentGreen) {
+            VStack(spacing: UISpacing.sm) {
+                ParameterSlider(
                     value: binding(\.attack),
                     label: "Attack",
                     accentColor: UIColors.accentGreen,
-                    valueFormatter: { String(format: "%.0fms", $0 * 1000) }
+                    valueFormatter: { String(format: "%.0fms", $0 * 1000) },
+                    defaultValue: 0.001
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.hold),
                     label: "Hold",
                     accentColor: UIColors.accentGreen,
-                    valueFormatter: { String(format: "%.0fms", $0 * 500) }
+                    valueFormatter: { String(format: "%.0fms", $0 * 500) },
+                    defaultValue: 0.0
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.decay),
                     label: "Decay",
                     accentColor: UIColors.accentGreen,
-                    valueFormatter: { String(format: "%.0fms", $0 * 2000) }
+                    valueFormatter: { String(format: "%.0fms", $0 * 2000) },
+                    defaultValue: 0.5
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.sustain),
                     label: "Sustain",
-                    accentColor: UIColors.accentGreen
+                    accentColor: UIColors.accentGreen,
+                    valueFormatter: { String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.0
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.release),
                     label: "Release",
                     accentColor: UIColors.accentGreen,
-                    valueFormatter: { String(format: "%.0fms", $0 * 1000) }
+                    valueFormatter: { String(format: "%.0fms", $0 * 1000) },
+                    defaultValue: 0.1
                 )
-            }
 
-            // Envelope visualization
-            EnvelopeView(
-                attack: voice.attack,
-                hold: voice.hold,
-                decay: voice.decay,
-                sustain: voice.sustain,
-                release: voice.release
-            )
-            .frame(height: 80)
+                // Envelope visualization
+                EnvelopeView(
+                    attack: voice.attack,
+                    hold: voice.hold,
+                    decay: voice.decay,
+                    sustain: voice.sustain,
+                    release: voice.release
+                )
+                .frame(height: 60)
+            }
         }
-        .panelStyle()
-        .padding(UISpacing.md)
     }
 
     // MARK: - Effects Section
 
     private var effectsSection: some View {
-        VStack(alignment: .leading, spacing: UISpacing.md) {
-            sectionHeader("EFFECTS")
-
-            HStack(spacing: UISpacing.xl) {
-                UIKnob(
+        sectionPanel(title: "EFFECTS", color: UIColors.accentOrange) {
+            VStack(spacing: UISpacing.sm) {
+                ParameterSlider(
                     value: binding(\.drive),
                     label: "Drive",
-                    accentColor: UIColors.accentOrange
+                    accentColor: UIColors.accentOrange,
+                    valueFormatter: { $0 < 0.05 ? "Off" : String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.0
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.bitcrush),
                     label: "Bitcrush",
                     accentColor: UIColors.accentOrange,
-                    valueFormatter: { $0 < 0.1 ? "Off" : String(format: "%.0f%%", $0 * 100) }
+                    valueFormatter: { $0 < 0.05 ? "Off" : String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.0
                 )
             }
         }
-        .panelStyle()
-        .padding(UISpacing.md)
     }
 
     // MARK: - Output Section
 
     private var outputSection: some View {
-        VStack(alignment: .leading, spacing: UISpacing.md) {
-            sectionHeader("OUTPUT")
-
-            HStack(spacing: UISpacing.xl) {
-                UIKnob(
+        sectionPanel(title: "OUTPUT", color: voiceType.color) {
+            VStack(spacing: UISpacing.sm) {
+                ParameterSlider(
                     value: binding(\.volume),
                     label: "Volume",
-                    accentColor: voiceType.color
+                    accentColor: voiceType.color,
+                    valueFormatter: { String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.8
                 )
 
-                UIBipolarKnob(
+                BipolarSlider(
                     value: binding(\.pan),
                     label: "Pan",
-                    accentColor: voiceType.color
+                    accentColor: voiceType.color,
+                    valueFormatter: {
+                        if abs($0) < 0.05 { return "C" }
+                        return $0 < 0 ? String(format: "L%.0f", abs($0) * 100) : String(format: "R%.0f", $0 * 100)
+                    },
+                    defaultValue: 0.0
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.reverbSend),
                     label: "Reverb",
-                    accentColor: UIColors.accentMagenta
+                    accentColor: UIColors.accentMagenta,
+                    valueFormatter: { String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.0
                 )
 
-                UIKnob(
+                ParameterSlider(
                     value: binding(\.delaySend),
                     label: "Delay",
-                    accentColor: UIColors.accentOrange
+                    accentColor: UIColors.accentOrange,
+                    valueFormatter: { String(format: "%.0f%%", $0 * 100) },
+                    defaultValue: 0.0
                 )
             }
         }
-        .panelStyle()
-        .padding(UISpacing.md)
     }
 
     // MARK: - Helpers
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
-            .foregroundStyle(UIColors.textSecondary)
+    /// Creates a section panel with title and content
+    private func sectionPanel<Content: View>(
+        title: String,
+        color: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: UISpacing.sm) {
+            // Section header - outside the panel background for visibility
+            HStack(spacing: UISpacing.xs) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color)
+                    .frame(width: 3, height: 12)
+
+                Text(title)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(UIColors.textSecondary)
+            }
+
+            // Content panel with proper internal padding
+            VStack(alignment: .leading, spacing: UISpacing.sm) {
+                content()
+            }
+            .padding(UISpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(UIColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(UIColors.border, lineWidth: 1)
+            )
+        }
     }
 
     /// Whether this voice type supports tone/noise mix
@@ -367,7 +408,7 @@ struct EnvelopeView: View {
                 )
             )
         }
-        .background(UIColors.surface)
+        .background(UIColors.elevated)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -376,6 +417,6 @@ struct EnvelopeView: View {
 
 #Preview {
     UIVoiceEditor(store: AppStore(project: .demo()))
-        .frame(width: 600)
+        .frame(width: 700)
         .background(UIColors.background)
 }

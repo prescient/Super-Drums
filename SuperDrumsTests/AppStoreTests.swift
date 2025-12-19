@@ -321,4 +321,187 @@ final class AppStoreTests: XCTestCase {
 
         store.stopAudioEngine()
     }
+
+    // MARK: - Parameter Locks
+
+    func test_setParameterLock_velocity_setsNormalizedVelocity() {
+        let store = AppStore()
+        store.toggleStep(voice: .kick, stepIndex: 0)
+
+        store.setParameterLock(for: .kick, stepIndex: 0, parameter: .velocity, value: 0.5)
+
+        let step = store.step(voice: .kick, stepIndex: 0)
+        // 0.5 * 127 = 63.5 -> 63 or 64 depending on rounding
+        XCTAssertEqual(step?.velocity, 63)
+    }
+
+    func test_setParameterLock_probability_setsProbability() {
+        let store = AppStore()
+        store.toggleStep(voice: .snare, stepIndex: 4)
+
+        store.setParameterLock(for: .snare, stepIndex: 4, parameter: .probability, value: 0.75)
+
+        let step = store.step(voice: .snare, stepIndex: 4)
+        XCTAssertEqual(step?.probability, 0.75)
+    }
+
+    func test_setParameterLock_retrigger_setsRetriggerCount() {
+        let store = AppStore()
+        store.toggleStep(voice: .closedHat, stepIndex: 0)
+
+        // Value of 0.5 should map to ~2 retriggers (0.5 * 3 + 1 = 2.5 -> 2)
+        store.setParameterLock(for: .closedHat, stepIndex: 0, parameter: .retrigger, value: 0.5)
+
+        let step = store.step(voice: .closedHat, stepIndex: 0)
+        XCTAssertEqual(step?.retriggerCount, 2)
+    }
+
+    func test_setParameterLock_retrigger_mapsFullRange() {
+        let store = AppStore()
+        store.toggleStep(voice: .snare, stepIndex: 0)
+
+        // Value of 1.0 should map to 4 retriggers (1.0 * 3 + 1 = 4)
+        store.setParameterLock(for: .snare, stepIndex: 0, parameter: .retrigger, value: 1.0)
+
+        let step = store.step(voice: .snare, stepIndex: 0)
+        XCTAssertEqual(step?.retriggerCount, 4)
+
+        // Value of 0.0 should map to 1 retrigger (0.0 * 3 + 1 = 1)
+        store.setParameterLock(for: .snare, stepIndex: 0, parameter: .retrigger, value: 0.0)
+
+        let stepAfter = store.step(voice: .snare, stepIndex: 0)
+        XCTAssertEqual(stepAfter?.retriggerCount, 1)
+    }
+
+    func test_setParameterLock_synthParameter_storesInParameterLocks() {
+        let store = AppStore()
+        store.toggleStep(voice: .kick, stepIndex: 0)
+
+        store.setParameterLock(for: .kick, stepIndex: 0, parameter: .pitch, value: 0.8)
+
+        let step = store.step(voice: .kick, stepIndex: 0)
+        XCTAssertEqual(step?.parameterLocks["pitch"], 0.8)
+    }
+
+    func test_clearParameterLock_velocity_resetsToDefault() {
+        let store = AppStore()
+        store.toggleStep(voice: .kick, stepIndex: 0)
+        store.setParameterLock(for: .kick, stepIndex: 0, parameter: .velocity, value: 0.3)
+
+        store.clearParameterLock(for: .kick, stepIndex: 0, parameter: .velocity)
+
+        let step = store.step(voice: .kick, stepIndex: 0)
+        XCTAssertEqual(step?.velocity, 100) // Default velocity
+    }
+
+    func test_clearParameterLock_probability_resetsToDefault() {
+        let store = AppStore()
+        store.toggleStep(voice: .snare, stepIndex: 0)
+        store.setParameterLock(for: .snare, stepIndex: 0, parameter: .probability, value: 0.5)
+
+        store.clearParameterLock(for: .snare, stepIndex: 0, parameter: .probability)
+
+        let step = store.step(voice: .snare, stepIndex: 0)
+        XCTAssertEqual(step?.probability, 1.0) // Default probability
+    }
+
+    func test_clearParameterLock_retrigger_resetsToDefault() {
+        let store = AppStore()
+        store.toggleStep(voice: .closedHat, stepIndex: 0)
+        store.setParameterLock(for: .closedHat, stepIndex: 0, parameter: .retrigger, value: 1.0)
+
+        store.clearParameterLock(for: .closedHat, stepIndex: 0, parameter: .retrigger)
+
+        let step = store.step(voice: .closedHat, stepIndex: 0)
+        XCTAssertEqual(step?.retriggerCount, 1) // Default retrigger
+    }
+
+    func test_clearParameterLock_synthParameter_removesFromDictionary() {
+        let store = AppStore()
+        store.toggleStep(voice: .kick, stepIndex: 0)
+        store.setParameterLock(for: .kick, stepIndex: 0, parameter: .decay, value: 0.7)
+
+        store.clearParameterLock(for: .kick, stepIndex: 0, parameter: .decay)
+
+        let step = store.step(voice: .kick, stepIndex: 0)
+        XCTAssertNil(step?.parameterLocks["decay"])
+    }
+
+    func test_clearParameterLocks_velocity_resetsAllSteps() {
+        let store = AppStore()
+        store.toggleStep(voice: .kick, stepIndex: 0)
+        store.toggleStep(voice: .kick, stepIndex: 4)
+        store.setParameterLock(for: .kick, stepIndex: 0, parameter: .velocity, value: 0.3)
+        store.setParameterLock(for: .kick, stepIndex: 4, parameter: .velocity, value: 0.6)
+
+        store.clearParameterLocks(for: .kick, parameter: .velocity)
+
+        let step0 = store.step(voice: .kick, stepIndex: 0)
+        let step4 = store.step(voice: .kick, stepIndex: 4)
+        XCTAssertEqual(step0?.velocity, 100)
+        XCTAssertEqual(step4?.velocity, 100)
+    }
+
+    func test_clearAllParameterLocks_removesAllLocks() {
+        let store = AppStore()
+        store.toggleStep(voice: .kick, stepIndex: 0)
+        store.setParameterLock(for: .kick, stepIndex: 0, parameter: .pitch, value: 0.5)
+        store.setParameterLock(for: .kick, stepIndex: 0, parameter: .decay, value: 0.7)
+
+        store.clearAllParameterLocks(for: .kick)
+
+        let step = store.step(voice: .kick, stepIndex: 0)
+        XCTAssertTrue(step?.parameterLocks.isEmpty == true)
+    }
+
+    // MARK: - Voice Editing Sync
+
+    func test_selectedVoice_setter_syncsToDSP() {
+        let store = AppStore()
+        store.startAudioEngine()
+
+        // Modify the selected voice
+        var voice = store.selectedVoice
+        voice.pitch = 0.8
+        store.selectedVoice = voice
+
+        // Verify the change persisted
+        XCTAssertEqual(store.selectedVoice.pitch, 0.8)
+
+        store.stopAudioEngine()
+    }
+}
+
+// MARK: - LockableParameter Tests
+
+final class LockableParameterTests: XCTestCase {
+
+    func test_isStepParameter_velocity_returnsTrue() {
+        XCTAssertTrue(LockableParameter.velocity.isStepParameter)
+    }
+
+    func test_isStepParameter_probability_returnsTrue() {
+        XCTAssertTrue(LockableParameter.probability.isStepParameter)
+    }
+
+    func test_isStepParameter_retrigger_returnsTrue() {
+        XCTAssertTrue(LockableParameter.retrigger.isStepParameter)
+    }
+
+    func test_isStepParameter_synthParams_returnsFalse() {
+        XCTAssertFalse(LockableParameter.pitch.isStepParameter)
+        XCTAssertFalse(LockableParameter.decay.isStepParameter)
+        XCTAssertFalse(LockableParameter.filterCutoff.isStepParameter)
+        XCTAssertFalse(LockableParameter.filterResonance.isStepParameter)
+        XCTAssertFalse(LockableParameter.drive.isStepParameter)
+        XCTAssertFalse(LockableParameter.pan.isStepParameter)
+        XCTAssertFalse(LockableParameter.reverbSend.isStepParameter)
+        XCTAssertFalse(LockableParameter.delaySend.isStepParameter)
+    }
+
+    func test_shortName_returnsThreeCharacterAbbreviation() {
+        for param in LockableParameter.allCases {
+            XCTAssertEqual(param.shortName.count, 3, "Parameter \(param) shortName should be 3 characters")
+        }
+    }
 }
