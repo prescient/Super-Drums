@@ -115,6 +115,15 @@ final class AppStore {
         do {
             try dspEngine.start()
             syncPatternToDSP()
+            // Sync master settings
+            dspEngine.setMasterVolume(project.masterVolume)
+            // Sync effect parameters
+            dspEngine.setReverbMix(project.reverbMix)
+            dspEngine.setDelayParameters(
+                mix: project.delayMix,
+                time: project.delayTime,
+                feedback: project.delayFeedback
+            )
         } catch {
             // Audio engine failed to start - app will operate without sound
         }
@@ -164,6 +173,65 @@ final class AppStore {
             project.swing = max(0.5, min(0.75, newValue))
             dspEngine.setSwing(project.swing)
         }
+    }
+
+    /// Master volume (synced to DSP engine)
+    var masterVolume: Float {
+        get { project.masterVolume }
+        set {
+            project.masterVolume = max(0, min(1, newValue))
+            dspEngine.setMasterVolume(project.masterVolume)
+        }
+    }
+
+    /// Gets current output levels for metering (left, right)
+    var outputLevels: (Float, Float) {
+        dspEngine.getOutputLevels()
+    }
+
+    /// Reverb mix (synced to DSP engine)
+    var reverbMix: Float {
+        get { project.reverbMix }
+        set {
+            project.reverbMix = max(0, min(1, newValue))
+            dspEngine.setReverbMix(project.reverbMix)
+        }
+    }
+
+    /// Delay mix (synced to DSP engine)
+    var delayMix: Float {
+        get { project.delayMix }
+        set {
+            project.delayMix = max(0, min(1, newValue))
+            syncDelayParameters()
+        }
+    }
+
+    /// Delay time
+    var delayTime: Float {
+        get { project.delayTime }
+        set {
+            project.delayTime = max(0, min(1, newValue))
+            syncDelayParameters()
+        }
+    }
+
+    /// Delay feedback
+    var delayFeedback: Float {
+        get { project.delayFeedback }
+        set {
+            project.delayFeedback = max(0, min(0.95, newValue))
+            syncDelayParameters()
+        }
+    }
+
+    /// Sync delay parameters to DSP
+    private func syncDelayParameters() {
+        dspEngine.setDelayParameters(
+            mix: project.delayMix,
+            time: project.delayTime,
+            feedback: project.delayFeedback
+        )
     }
 
     // MARK: - Transport Controls

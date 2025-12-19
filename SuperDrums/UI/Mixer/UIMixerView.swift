@@ -81,18 +81,18 @@ struct UIMixerView: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(UIColors.textPrimary)
 
-            // Master fader
+            // Master fader (uses computed property that syncs to DSP)
             UIFader(
-                value: $store.project.masterVolume,
+                value: $store.masterVolume,
                 label: "",
                 accentColor: UIColors.accentCyan,
                 width: 50,
                 height: 180
             )
 
-            // VU meter placeholder
-            VUMeter(level: store.project.masterVolume)
-                .frame(width: 20, height: 100)
+            // VU meter showing actual output level
+            StereoVUMeter(store: store)
+                .frame(width: 30, height: 100)
         }
         .frame(width: UISizes.channelStripWidth + 20)
         .padding(.vertical, UISpacing.md)
@@ -110,7 +110,7 @@ struct UIMixerView: View {
                     .labelStyle()
 
                 UIKnob(
-                    value: $store.project.reverbMix,
+                    value: $store.reverbMix,
                     label: "Mix",
                     accentColor: UIColors.accentMagenta,
                     size: UISizes.knobSmall
@@ -124,21 +124,21 @@ struct UIMixerView: View {
 
                 HStack(spacing: UISpacing.sm) {
                     UIKnob(
-                        value: $store.project.delayMix,
+                        value: $store.delayMix,
                         label: "Mix",
                         accentColor: UIColors.accentOrange,
                         size: UISizes.knobSmall
                     )
 
                     UIKnob(
-                        value: $store.project.delayTime,
+                        value: $store.delayTime,
                         label: "Time",
                         accentColor: UIColors.accentOrange,
                         size: UISizes.knobSmall
                     )
 
                     UIKnob(
-                        value: $store.project.delayFeedback,
+                        value: $store.delayFeedback,
                         label: "Feedback",
                         accentColor: UIColors.accentOrange,
                         size: UISizes.knobSmall
@@ -242,6 +242,44 @@ struct VUMeter: View {
         } else {
             return UIColors.accentGreen // Green for normal
         }
+    }
+}
+
+// MARK: - Stereo VU Meter
+
+/// Stereo VU meter with real-time audio levels from DSP engine
+struct StereoVUMeter: View {
+    @Bindable var store: AppStore
+    @State private var leftLevel: Float = 0
+    @State private var rightLevel: Float = 0
+    @State private var timer: Timer?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            VUMeter(level: leftLevel)
+            VUMeter(level: rightLevel)
+        }
+        .onAppear {
+            startMetering()
+        }
+        .onDisappear {
+            stopMetering()
+        }
+    }
+
+    private func startMetering() {
+        // Update at 30fps for smooth metering
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
+            let levels = store.outputLevels
+            // Scale RMS to approximate VU meter response (RMS is typically 0-0.5 for normal levels)
+            leftLevel = min(1.0, levels.0 * 2.0)
+            rightLevel = min(1.0, levels.1 * 2.0)
+        }
+    }
+
+    private func stopMetering() {
+        timer?.invalidate()
+        timer = nil
     }
 }
 

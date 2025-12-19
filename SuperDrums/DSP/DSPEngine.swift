@@ -33,6 +33,10 @@ final class DSPEngine {
     /// Voice synthesizers (one per voice type)
     private var voiceSynths: [DrumVoiceSynth] = []
 
+    /// Master effects
+    private var reverbEffect: ReverbEffect?
+    private var delayEffect: DelayEffect?
+
     /// Callback for step advancement (called on main thread)
     var onStepAdvanced: ((Int) -> Void)?
 
@@ -81,10 +85,16 @@ final class DSPEngine {
 
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
 
+        // Initialize effects
+        reverbEffect = ReverbEffect(sampleRate: Float(sampleRate))
+        delayEffect = DelayEffect(sampleRate: Float(sampleRate))
+
         // Capture self weakly and the synths array for the audio thread
         let state = playbackState
         let synths = voiceSynths
         let sr = sampleRate
+        let reverb = reverbEffect!
+        let delay = delayEffect!
 
         // Create the sequencer source node
         // This runs on the audio render thread and provides sample-accurate timing
@@ -95,6 +105,8 @@ final class DSPEngine {
                 sampleRate: sr,
                 frameCount: frameCount,
                 audioBufferList: audioBufferList,
+                reverb: reverb,
+                delay: delay,
                 onStepAdvanced: { step in
                     DispatchQueue.main.async {
                         self?.onStepAdvanced?(step)
@@ -164,6 +176,23 @@ final class DSPEngine {
         playbackState.swing = swing
     }
 
+    /// Set master volume (0.0 - 1.0)
+    func setMasterVolume(_ volume: Float) {
+        playbackState.masterVolume = max(0, min(1, volume))
+    }
+
+    /// Set reverb mix (0.0 - 1.0)
+    func setReverbMix(_ mix: Float) {
+        playbackState.reverbMix = max(0, min(1, mix))
+    }
+
+    /// Set delay parameters
+    func setDelayParameters(mix: Float, time: Float, feedback: Float) {
+        playbackState.delayMix = max(0, min(1, mix))
+        playbackState.delayTime = max(0, min(1, time))
+        playbackState.delayFeedback = max(0, min(0.95, feedback)) // Limit feedback to prevent runaway
+    }
+
     // MARK: - Pattern Data
 
     /// Updates the current pattern data for playback
@@ -199,6 +228,8 @@ final class DSPEngine {
             playbackState.voiceSoloed[index] = voice.isSoloed
             playbackState.voiceVolumes[index] = voice.volume
             playbackState.voicePans[index] = voice.pan
+            playbackState.voiceReverbSend[index] = voice.reverbSend
+            playbackState.voiceDelaySend[index] = voice.delaySend
         }
 
         // Calculate solo state
@@ -216,6 +247,8 @@ final class DSPEngine {
         sampleRate: Double,
         frameCount: AVAudioFrameCount,
         audioBufferList: UnsafeMutablePointer<AudioBufferList>,
+        reverb: ReverbEffect,
+        delay: DelayEffect,
         onStepAdvanced: @escaping (Int) -> Void,
         onVoiceTriggered: @escaping (DrumVoiceType, Float) -> Void
     ) -> OSStatus {
@@ -247,6 +280,17 @@ final class DSPEngine {
         let samplesPerStep = samplesPerBeat / 4.0
 
         var currentSample = state.samplePosition
+
+        // RMS accumulators for metering
+        var leftRMSSum: Float = 0.0
+        var rightRMSSum: Float = 0.0
+
+        // Update effect parameters from state (once per buffer)
+        reverb.wetLevel = state.reverbMix
+        reverb.dryLevel = 1.0 - state.reverbMix * 0.5  // Keep some dry signal
+        delay.mix = state.delayMix
+        delay.delayTime = state.delayTime
+        delay.feedback = state.delayFeedback
 
         // Process each sample
         for frameIndex in 0..<Int(frameCount) {
@@ -280,6 +324,10 @@ final class DSPEngine {
             // Render all voice synths (even when not playing, to finish decaying sounds)
             var leftSample: Float = 0
             var rightSample: Float = 0
+            var reverbSendL: Float = 0
+            var reverbSendR: Float = 0
+            var delaySendL: Float = 0
+            var delaySendR: Float = 0
 
             for (voiceIndex, synth) in synths.enumerated() {
                 // Check mute/solo
@@ -302,14 +350,53 @@ final class DSPEngine {
                     let leftGain = volume * cosf((pan + 1.0) * .pi / 4.0)
                     let rightGain = volume * sinf((pan + 1.0) * .pi / 4.0)
 
-                    leftSample += sample * leftGain
-                    rightSample += sample * rightGain
+                    let voiceLeft = sample * leftGain
+                    let voiceRight = sample * rightGain
+
+                    leftSample += voiceLeft
+                    rightSample += voiceRight
+
+                    // Collect reverb send (post-fader)
+                    let reverbSend = state.voiceReverbSend[voiceIndex]
+                    if reverbSend > 0.01 {
+                        reverbSendL += voiceLeft * reverbSend
+                        reverbSendR += voiceRight * reverbSend
+                    }
+
+                    // Collect delay send (post-fader)
+                    let delaySend = state.voiceDelaySend[voiceIndex]
+                    if delaySend > 0.01 {
+                        delaySendL += voiceLeft * delaySend
+                        delaySendR += voiceRight * delaySend
+                    }
                 }
             }
+
+            // Process effects (returns wet signal only when mix > 0)
+            if state.reverbMix > 0.01 {
+                let (revL, revR) = reverb.process(inputL: reverbSendL, inputR: reverbSendR)
+                leftSample += revL
+                rightSample += revR
+            }
+
+            if state.delayMix > 0.01 {
+                let (delL, delR) = delay.process(inputL: delaySendL, inputR: delaySendR)
+                leftSample += delL
+                rightSample += delR
+            }
+
+            // Apply master volume
+            let masterVol = state.masterVolume
+            leftSample *= masterVol
+            rightSample *= masterVol
 
             // Soft clip to prevent harsh distortion
             let clippedLeft = softClip(leftSample)
             let clippedRight = softClip(rightSample)
+
+            // Accumulate RMS for metering
+            leftRMSSum += clippedLeft * clippedLeft
+            rightRMSSum += clippedRight * clippedRight
 
             // Write to buffer based on format
             if isInterleaved {
@@ -325,6 +412,13 @@ final class DSPEngine {
                 right[frameIndex] = clippedRight
             }
         }
+
+        // Update RMS levels for metering (smoothed)
+        let rmsDecay: Float = 0.9
+        let newLeftRMS = sqrtf(leftRMSSum / Float(frameCount))
+        let newRightRMS = sqrtf(rightRMSSum / Float(frameCount))
+        state.leftRMS = state.leftRMS * rmsDecay + newLeftRMS * (1.0 - rmsDecay)
+        state.rightRMS = state.rightRMS * rmsDecay + newRightRMS * (1.0 - rmsDecay)
 
         state.samplePosition = currentSample
 
@@ -386,10 +480,9 @@ final class DSPEngine {
 
     // MARK: - Metering
 
-    /// Gets the current output level for metering
+    /// Gets the current output level for metering (left, right)
     func getOutputLevels() -> (Float, Float) {
-        // TODO: Implement RMS metering
-        return (0.0, 0.0)
+        return (playbackState.leftRMS, playbackState.rightRMS)
     }
 
     /// Gets the output level for a specific voice
@@ -421,6 +514,27 @@ private final class PlaybackState: @unchecked Sendable {
     var voiceVolumes: [Float] = Array(repeating: 0.8, count: 10)
     var voicePans: [Float] = Array(repeating: 0.0, count: 10)
     var anySoloed: Bool = false
+
+    /// Master settings
+    var masterVolume: Float = 0.8
+
+    /// Reverb settings
+    var reverbMix: Float = 0.3
+
+    /// Delay settings
+    var delayMix: Float = 0.2
+    var delayTime: Float = 0.5
+    var delayFeedback: Float = 0.4
+
+    /// Voice send levels for reverb (per voice)
+    var voiceReverbSend: [Float] = Array(repeating: 0.0, count: 10)
+
+    /// Voice send levels for delay (per voice)
+    var voiceDelaySend: [Float] = Array(repeating: 0.0, count: 10)
+
+    /// RMS levels for metering (updated per buffer)
+    var leftRMS: Float = 0.0
+    var rightRMS: Float = 0.0
 }
 
 /// Trigger data for a single step (audio-thread safe copy)
@@ -1148,4 +1262,217 @@ enum DSPConstants {
 
     /// DC blocker coefficient
     static let dcBlockerCoeff: Float = 0.995
+}
+
+// MARK: - Freeverb Reverb Effect
+
+/// Simple Freeverb-style reverb using comb and allpass filters
+private final class ReverbEffect: @unchecked Sendable {
+    // Comb filter delay lines (8 parallel comb filters)
+    private var combDelayL: [[Float]] = []
+    private var combDelayR: [[Float]] = []
+    private var combPositions: [Int] = Array(repeating: 0, count: 8)
+    private var combFeedback: [Float] = []
+
+    // Allpass filter delay lines (4 serial allpass filters)
+    private var allpassDelayL: [[Float]] = []
+    private var allpassDelayR: [[Float]] = []
+    private var allpassPositions: [Int] = Array(repeating: 0, count: 4)
+
+    // Reverb parameters
+    var roomSize: Float = 0.5
+    var damping: Float = 0.5
+    var wetLevel: Float = 0.3
+    var dryLevel: Float = 0.7
+
+    // Damping filter state
+    private var dampL: [Float] = Array(repeating: 0, count: 8)
+    private var dampR: [Float] = Array(repeating: 0, count: 8)
+
+    // Comb filter delay lengths (in samples at 44100Hz, tuned for Freeverb)
+    private let combLengths: [Int] = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617]
+
+    // Allpass filter delay lengths
+    private let allpassLengths: [Int] = [556, 441, 341, 225]
+
+    init(sampleRate: Float = 44100) {
+        setupDelayLines(sampleRate: sampleRate)
+    }
+
+    private func setupDelayLines(sampleRate: Float) {
+        let ratio = sampleRate / 44100.0
+
+        // Initialize comb filters
+        combDelayL = []
+        combDelayR = []
+        combFeedback = []
+        for length in combLengths {
+            let scaledLength = max(1, Int(Float(length) * ratio))
+            combDelayL.append(Array(repeating: 0, count: scaledLength))
+            combDelayR.append(Array(repeating: 0, count: scaledLength + 23)) // Stereo spread
+            combFeedback.append(0.84) // Default feedback
+        }
+        combPositions = Array(repeating: 0, count: combLengths.count)
+        dampL = Array(repeating: 0, count: combLengths.count)
+        dampR = Array(repeating: 0, count: combLengths.count)
+
+        // Initialize allpass filters
+        allpassDelayL = []
+        allpassDelayR = []
+        for length in allpassLengths {
+            let scaledLength = max(1, Int(Float(length) * ratio))
+            allpassDelayL.append(Array(repeating: 0, count: scaledLength))
+            allpassDelayR.append(Array(repeating: 0, count: scaledLength + 23)) // Stereo spread
+        }
+        allpassPositions = Array(repeating: 0, count: allpassLengths.count)
+    }
+
+    /// Process a stereo sample through the reverb
+    func process(inputL: Float, inputR: Float) -> (Float, Float) {
+        let input = (inputL + inputR) * 0.5 // Sum to mono for reverb input
+
+        // Calculate feedback based on room size
+        let feedback = roomSize * 0.28 + 0.7
+
+        var outputL: Float = 0
+        var outputR: Float = 0
+
+        // Process comb filters in parallel
+        for i in 0..<combDelayL.count {
+            let posL = combPositions[i]
+            let lengthL = combDelayL[i].count
+            let lengthR = combDelayR[i].count
+            let posR = posL % lengthR
+
+            // Read from delay lines
+            let delayedL = combDelayL[i][posL]
+            let delayedR = combDelayR[i][posR]
+
+            // Apply damping (simple lowpass)
+            dampL[i] = delayedL * (1.0 - damping) + dampL[i] * damping
+            dampR[i] = delayedR * (1.0 - damping) + dampR[i] * damping
+
+            // Write back with feedback
+            combDelayL[i][posL] = input + dampL[i] * feedback
+            combDelayR[i][posR] = input + dampR[i] * feedback
+
+            outputL += dampL[i]
+            outputR += dampR[i]
+
+            // Advance position
+            combPositions[i] = (posL + 1) % lengthL
+        }
+
+        // Normalize comb output
+        outputL *= 0.25
+        outputR *= 0.25
+
+        // Process allpass filters in series
+        for i in 0..<allpassDelayL.count {
+            let posL = allpassPositions[i]
+            let lengthL = allpassDelayL[i].count
+            let lengthR = allpassDelayR[i].count
+            let posR = posL % lengthR
+
+            let delayedL = allpassDelayL[i][posL]
+            let delayedR = allpassDelayR[i][posR]
+
+            let allpassCoeff: Float = 0.5
+
+            let tempL = outputL + delayedL * allpassCoeff
+            let tempR = outputR + delayedR * allpassCoeff
+
+            allpassDelayL[i][posL] = outputL - delayedL * allpassCoeff
+            allpassDelayR[i][posR] = outputR - delayedR * allpassCoeff
+
+            outputL = tempL
+            outputR = tempR
+
+            allpassPositions[i] = (posL + 1) % lengthL
+        }
+
+        // Mix dry and wet
+        let finalL = inputL * dryLevel + outputL * wetLevel
+        let finalR = inputR * dryLevel + outputR * wetLevel
+
+        return (finalL, finalR)
+    }
+
+    /// Clear all delay lines
+    func clear() {
+        for i in 0..<combDelayL.count {
+            combDelayL[i] = Array(repeating: 0, count: combDelayL[i].count)
+            combDelayR[i] = Array(repeating: 0, count: combDelayR[i].count)
+            dampL[i] = 0
+            dampR[i] = 0
+        }
+        for i in 0..<allpassDelayL.count {
+            allpassDelayL[i] = Array(repeating: 0, count: allpassDelayL[i].count)
+            allpassDelayR[i] = Array(repeating: 0, count: allpassDelayR[i].count)
+        }
+        combPositions = Array(repeating: 0, count: combPositions.count)
+        allpassPositions = Array(repeating: 0, count: allpassPositions.count)
+    }
+}
+
+// MARK: - Stereo Delay Effect
+
+/// Simple stereo delay with feedback
+private final class DelayEffect: @unchecked Sendable {
+    private var delayBufferL: [Float] = []
+    private var delayBufferR: [Float] = []
+    private var writePosition: Int = 0
+    private var maxDelaySamples: Int = 0
+
+    /// Delay time in seconds (0-1 mapped to 0-1 second)
+    var delayTime: Float = 0.5
+
+    /// Feedback amount (0-1)
+    var feedback: Float = 0.4
+
+    /// Wet/dry mix (0-1)
+    var mix: Float = 0.3
+
+    private let sampleRate: Float
+
+    init(sampleRate: Float = 44100) {
+        self.sampleRate = sampleRate
+        // Maximum 1 second of delay
+        maxDelaySamples = Int(sampleRate)
+        delayBufferL = Array(repeating: 0, count: maxDelaySamples)
+        delayBufferR = Array(repeating: 0, count: maxDelaySamples)
+    }
+
+    /// Process a stereo sample through the delay
+    func process(inputL: Float, inputR: Float) -> (Float, Float) {
+        // Calculate delay in samples
+        let delaySamples = Int(delayTime * sampleRate * 0.9) + Int(sampleRate * 0.05)
+        let readPositionL = (writePosition - delaySamples + maxDelaySamples) % maxDelaySamples
+        // Slight offset for stereo spread
+        let readPositionR = (writePosition - delaySamples - Int(sampleRate * 0.02) + maxDelaySamples) % maxDelaySamples
+
+        // Read from delay buffer
+        let delayedL = delayBufferL[readPositionL]
+        let delayedR = delayBufferR[readPositionR]
+
+        // Write to delay buffer with feedback (cross-feedback for stereo width)
+        delayBufferL[writePosition] = inputL + delayedR * feedback
+        delayBufferR[writePosition] = inputR + delayedL * feedback
+
+        // Advance write position
+        writePosition = (writePosition + 1) % maxDelaySamples
+
+        // Mix dry and wet
+        let outputL = inputL * (1.0 - mix) + delayedL * mix
+        let outputR = inputR * (1.0 - mix) + delayedR * mix
+
+        return (outputL, outputR)
+    }
+
+    /// Clear the delay buffer
+    func clear() {
+        delayBufferL = Array(repeating: 0, count: maxDelaySamples)
+        delayBufferR = Array(repeating: 0, count: maxDelaySamples)
+        writePosition = 0
+    }
 }
