@@ -745,31 +745,37 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             params.drive = 0.08
 
         case .closedHat:
-            // TR-808 style: 6 square wave oscillators + filtering
-            // Pitch controls oscillator frequencies, toneMix adds noise shimmer
-            params.basePitch = 0.5       // Nominal pitch (scales 6 oscillators 0.5x-1.5x)
+            // TR-808 style: 6 square wave oscillators + resonant bandpass
+            // Control mapping (all parameters have audible impact):
+            // - Pitch: Controls oscillator frequencies AND bandpass center (3-12kHz)
+            // - Filter Cutoff: Controls highpass frequency (500Hz-5kHz) for brightness
+            // - Filter Resonance: Controls bandpass resonance for metallic "ring"
+            // - Tone Mix: Blend between metallic oscillators and noise
+            // - Decay: Envelope time (30-150ms range)
+            params.basePitch = 0.5       // Mid pitch = ~7.5kHz bandpass center
             params.pitchEnvAmount = 0.0  // No pitch envelope for hats
-            params.toneMix = 0.2         // 20% noise shimmer on top of metallic oscillators
-            params.filterType = 1        // Highpass (controls brightness 7-11kHz)
-            params.filterCutoff = 0.5    // Mid brightness
-            params.filterResonance = 0.0 // No resonance for clean hat sound
+            params.toneMix = 0.25        // 25% noise for shimmer
+            params.filterType = 1        // Highpass
+            params.filterCutoff = 0.3    // ~1.85kHz highpass (lets through more body)
+            params.filterResonance = 0.3 // Moderate resonance for metallic ring
             params.attack = 0.001
-            params.decay = 0.15          // Not used for closed hat (fixed 50ms)
+            params.decay = 0.25          // ~60ms decay (30-150ms range)
             params.release = 0.02
-            params.drive = 0.05          // Subtle analog warmth
+            params.drive = 0.1           // Some drive for presence
 
         case .openHat:
-            // TR-808 style: same synthesis as closed but longer decay
-            params.basePitch = 0.5       // Nominal pitch
+            // TR-808 style: same synthesis as closed but longer decay range
+            // Decay controls open hat ring time (50-800ms)
+            params.basePitch = 0.45      // Slightly lower pitch for open hat character
             params.pitchEnvAmount = 0.0
-            params.toneMix = 0.25        // Slightly more noise shimmer for open hat
+            params.toneMix = 0.3         // More noise shimmer for open hat sizzle
             params.filterType = 1        // Highpass
-            params.filterCutoff = 0.4    // Slightly darker than closed hat
-            params.filterResonance = 0.0
+            params.filterCutoff = 0.25   // Darker than closed (~1.6kHz)
+            params.filterResonance = 0.35 // Slightly more resonance for ring
             params.attack = 0.001
-            params.decay = 0.55          // Controls open hat ring time
+            params.decay = 0.5           // ~425ms decay (50-800ms range)
             params.release = 0.1
-            params.drive = 0.05
+            params.drive = 0.1
 
         case .clap:
             params.basePitch = 0.6
@@ -1152,43 +1158,50 @@ private final class DrumVoiceSynth: @unchecked Sendable {
 
     // MARK: - Hi-Hat Synthesis (TR-808 Style)
 
-    /// TR-808 hi-hat synthesis using 6 square wave oscillators.
-    /// Reference: https://www.baratatronix.com/blog/cascadia-808-cymbal-hi-hat-synthesis
+    /// TR-808 hi-hat synthesis using 6 square wave oscillators with resonant bandpass.
     ///
     /// Architecture:
-    /// - Six square wave oscillators at inharmonic frequencies (metallic "hash")
-    /// - Bandpass filter centered around 3440 Hz
-    /// - Highpass filter to remove low frequencies
-    /// - Pitch control scales all oscillator frequencies proportionally
-    /// - Closed hat: ~50ms decay, Open hat: uses voice decay parameter
+    /// - Six square wave oscillators at inharmonic frequencies create metallic "hash"
+    /// - Resonant bandpass filter shapes the metallic character (center freq controlled by pitch)
+    /// - Secondary highpass removes low-frequency rumble (controlled by filter cutoff)
+    /// - Noise layer adds shimmer (filtered through same bandpass for consistency)
+    ///
+    /// Control mapping (all controls now have audible impact):
+    /// - Pitch: Controls BOTH oscillator frequencies AND bandpass center frequency (3-12 kHz)
+    ///          This dramatically changes the metallic character from dark/gongy to bright/sizzly
+    /// - Filter Cutoff: Controls highpass frequency (500 Hz - 5 kHz) for overall brightness
+    /// - Filter Resonance: Controls bandpass resonance (0.5-8) for metallic "ring"
+    /// - Tone Mix: Blend between pure metallic oscillators and noise shimmer
+    /// - Decay: Envelope time (30-150ms for closed, 50-800ms for open)
+    /// - Drive: Saturation for grit and presence
     private func renderHiHatSample(sampleRate: Float) -> Float {
         let params = activeParameters
         let dt = 1.0 / sampleRate
 
         // === TR-808 OSCILLATOR FREQUENCIES ===
-        // Original TR-808 hi-hat frequencies (slightly inharmonic for metallic character)
-        // These create the characteristic "metallic hash" when mixed
+        // Base frequencies tuned for inharmonic metallic character
+        // Pitch parameter scales these AND the bandpass center frequency for dramatic effect
         let baseFrequencies: [Float] = [
-            800.0,    // Oscillator 1 (tuneable on real 808)
-            540.0,    // Oscillator 2 (tuneable on real 808)
-            522.7,    // Oscillator 3 (fixed)
-            369.6,    // Oscillator 4 (fixed)
-            304.4,    // Oscillator 5 (fixed)
-            205.3     // Oscillator 6 (fixed)
+            800.0,    // Oscillator 1
+            540.0,    // Oscillator 2
+            522.7,    // Oscillator 3
+            369.6,    // Oscillator 4
+            304.4,    // Oscillator 5
+            205.3     // Oscillator 6
         ]
 
-        // Pitch control scales all frequencies proportionally
-        // basePitch 0.5 = nominal, 0.0 = half pitch, 1.0 = double pitch
-        let pitchMod = 0.5 + params.basePitch  // 0.5 to 1.5 range
+        // Pitch control: scales oscillator frequencies from 0.5x to 2.0x
+        // This wide range makes pitch changes very audible
+        let pitchMod = 0.5 + params.basePitch * 1.5  // 0.5 to 2.0 range
         let frequencies = baseFrequencies.map { $0 * pitchMod }
 
         // === GENERATE SQUARE WAVE OSCILLATORS ===
-        // Mix all 6 square waves together
         var oscillatorMix: Float = 0
 
         for i in 0..<6 {
-            // Square wave: sign of sine wave
-            let squareWave: Float = sinf(hiHatPhases[i] * 2.0 * .pi) >= 0 ? 1.0 : -1.0
+            // Square wave with slight pulse width variation for richness
+            let pulseWidth: Float = 0.5 + (Float(i) - 2.5) * 0.02  // Vary 0.45-0.55
+            let squareWave: Float = (hiHatPhases[i] < pulseWidth) ? 1.0 : -1.0
             oscillatorMix += squareWave
 
             // Update phase
@@ -1198,92 +1211,83 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             }
         }
 
-        // Normalize the mix (6 oscillators summed)
+        // Normalize
         oscillatorMix /= 6.0
 
-        // === BANDPASS FILTER (3440 Hz center) ===
-        // This shapes the metallic character
-        let bpCenterFreq: Float = 3440.0
-        let bpQ: Float = 2.0  // Moderate resonance
+        // === NOISE COMPONENT ===
+        // Generate noise and mix based on toneMix parameter
+        // 0 = pure metallic oscillators, 1 = pure noise (white noise hi-hat character)
+        let noise = Float.random(in: -1...1)
+        let noiseMix = params.toneMix
+        var mixedSignal = oscillatorMix * (1.0 - noiseMix * 0.7) + noise * noiseMix
+
+        // === RESONANT BANDPASS FILTER ===
+        // Center frequency controlled by PITCH - this is the key to making pitch audible!
+        // Low pitch = dark, gongy sound (~3 kHz)
+        // High pitch = bright, sizzly sound (~12 kHz)
+        let bpCenterFreq: Float = 3000.0 + params.basePitch * 9000.0  // 3-12 kHz based on pitch
         let bpNormFreq = min(bpCenterFreq, sampleRate * 0.45) / sampleRate
         let bpF = 2.0 * sinf(.pi * bpNormFreq)
+
+        // Resonance from filter resonance parameter - adds metallic "ring"
+        let bpQ: Float = 0.5 + params.filterResonance * 7.5  // 0.5 to 8.0
         let bpDamping = 1.0 / bpQ
 
         // SVF bandpass
         hiHatBpLow = hiHatBpLow + bpF * hiHatBpBand
-        let bpHigh = oscillatorMix - hiHatBpLow - bpDamping * hiHatBpBand
+        let bpHigh = mixedSignal - hiHatBpLow - bpDamping * hiHatBpBand
         hiHatBpBand = bpF * bpHigh + hiHatBpBand
 
         // Protect against instability
         if !hiHatBpLow.isFinite { hiHatBpLow = 0 }
         if !hiHatBpBand.isFinite { hiHatBpBand = 0 }
 
-        let bpOutput = hiHatBpBand  // Bandpass output
+        // Mix bandpass with some of the original signal for body
+        // More resonance = more bandpass character
+        let bpAmount = 0.3 + params.filterResonance * 0.7  // 30-100% bandpass
+        var output = hiHatBpBand * bpAmount + mixedSignal * (1.0 - bpAmount) * 0.3
 
-        // === HIGHPASS FILTER (7000 Hz) ===
-        // Removes low frequency content for brighter, more realistic hi-hat
-        let hpCutoff: Float = 7000.0 + params.filterCutoff * 4000.0  // 7-11kHz based on cutoff
+        // === HIGHPASS FILTER ===
+        // Filter cutoff controls overall brightness by removing low frequencies
+        // This is secondary shaping after the bandpass
+        let hpCutoff: Float = 500.0 + params.filterCutoff * 4500.0  // 500 Hz - 5 kHz
         let hpNormFreq = min(hpCutoff, sampleRate * 0.45) / sampleRate
         let hpF = 2.0 * sinf(.pi * hpNormFreq)
-        let hpQ: Float = 0.7  // Low resonance for clean highpass
 
-        // SVF highpass
+        // SVF highpass (lower Q for clean cut)
         hiHatHpLow = hiHatHpLow + hpF * hiHatHpBand
-        let hpHigh = bpOutput - hiHatHpLow - (1.0 / hpQ) * hiHatHpBand
+        let hpHigh = output - hiHatHpLow - 1.4 * hiHatHpBand  // Q ~0.7
         hiHatHpBand = hpF * hpHigh + hiHatHpBand
 
         // Protect against instability
         if !hiHatHpLow.isFinite { hiHatHpLow = 0 }
         if !hiHatHpBand.isFinite { hiHatHpBand = 0 }
 
-        var output = hpHigh  // Highpass output
+        output = hpHigh
 
-        // === AMPLITUDE ENVELOPE ===
-        // Closed hat: fixed short decay (~50ms)
-        // Open hat: uses the decay parameter (90-600ms)
-        let ampEnv: Float
-        if voiceType == .closedHat {
-            // Fixed short decay for closed hat (50ms)
-            let closedDecay: Float = 0.05
-            ampEnv = expf(-totalPlayTime / closedDecay)
+        // === AMPLITUDE ENVELOPE (Full ADSR) ===
+        // Uses the same ADSR system as other voices, but with hi-hat appropriate decay ranges
+        // All parameters work: Attack, Hold, Decay, Sustain, Release
+        let ampEnv = processHiHatEnvelope(dt: dt, params: params)
 
-            // Stop playing when envelope is very low
-            if ampEnv < 0.001 {
-                isPlaying = false
-                currentLevel = 0
-                return 0
-            }
-        } else {
-            // Open hat uses ADSR envelope with decay parameter
-            ampEnv = processEnvelope(dt: dt, params: params)
-
-            if envelopeStage == .idle {
-                isPlaying = false
-                currentLevel = 0
-                return 0
-            }
+        // Check if envelope finished
+        if envelopeStage == .idle {
+            isPlaying = false
+            currentLevel = 0
+            return 0
         }
 
         // Apply envelope
         output *= ampEnv
 
-        // === NOISE LAYER (optional, controlled by toneMix) ===
-        // Add subtle noise for additional shimmer
-        let noiseAmount = params.toneMix * 0.3  // toneMix adds up to 30% noise
-        if noiseAmount > 0.01 {
-            let noise = Float.random(in: -1...1) * noiseAmount * ampEnv
-            output += noise
-        }
-
-        // === POST-PROCESSING ===
-
-        // Apply drive/saturation
+        // === DRIVE/SATURATION ===
+        // Adds grit and presence, makes the hi-hat cut through
         if params.drive > 0.01 {
-            let driveAmount = 1.0 + params.drive * 8.0
+            let driveAmount = 1.0 + params.drive * 12.0  // More aggressive drive range
             output = tanhf(output * driveAmount) / tanhf(driveAmount)
         }
 
-        // Apply bitcrush if enabled
+        // === BITCRUSH ===
         if params.bitcrush > 0.01 {
             output = processBitcrush(input: output, sampleRate: sampleRate, bitcrush: params.bitcrush)
         }
@@ -1291,8 +1295,8 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         // Apply velocity
         output *= velocity
 
-        // Boost overall level (6 square waves need gain compensation)
-        output *= 2.5
+        // Output level boost (compensate for filtering)
+        output *= 4.0
 
         // Update envelope times
         envelopeTime += dt
@@ -1367,6 +1371,81 @@ private final class DrumVoiceSynth: @unchecked Sendable {
 
         case .release:
             let releaseTime = max(0.001, params.release * 1.0) // 0-1 second
+            envelopeLevel *= expf(-dt / releaseTime)
+            if envelopeLevel < 0.001 {
+                envelopeStage = .idle
+                return 0
+            }
+            return envelopeLevel
+        }
+    }
+
+    /// Process ADSR envelope specifically for hi-hats
+    /// Uses appropriate decay ranges for closed (30-200ms) and open (50-1000ms) hi-hats
+    /// All ADSR parameters work: Attack, Hold, Decay, Sustain, Release
+    private func processHiHatEnvelope(dt: Float, params: SynthParameters) -> Float {
+        switch envelopeStage {
+        case .idle:
+            return 0
+
+        case .attack:
+            // Attack time: 0-200ms for hi-hats (allows soft attacks)
+            let attackTime = max(0.001, params.attack * 0.2)
+            envelopeLevel += dt / attackTime
+            if envelopeLevel >= 1.0 {
+                envelopeLevel = 1.0
+                envelopeStage = params.hold > 0.001 ? .hold : .decay
+                envelopeTime = 0
+            }
+            return envelopeLevel
+
+        case .hold:
+            // Hold time: 0-100ms for hi-hats (sustain at peak before decay)
+            let holdTime = params.hold * 0.1
+            if envelopeTime >= holdTime {
+                envelopeStage = .decay
+                envelopeTime = 0
+            }
+            return 1.0
+
+        case .decay:
+            // Decay time depends on voice type:
+            // Closed hat: 30-200ms (tight, crisp)
+            // Open hat: 50-1000ms (sustained ring)
+            let minDecay: Float
+            let maxDecay: Float
+            if voiceType == .closedHat {
+                minDecay = 0.03   // 30ms minimum
+                maxDecay = 0.20   // 200ms maximum
+            } else {
+                minDecay = 0.05   // 50ms minimum
+                maxDecay = 1.0    // 1 second maximum
+            }
+
+            // Decay time with squared curve for more control at short values
+            let totalDecayTime = minDecay + params.decay * params.decay * (maxDecay - minDecay)
+            let timeConstant = totalDecayTime / 3.0
+
+            let target = params.sustain
+            envelopeLevel = target + (1.0 - target) * expf(-envelopeTime / timeConstant)
+
+            // Transition to release when envelope reaches sustain level
+            if envelopeLevel <= target + 0.01 || envelopeTime > totalDecayTime * 1.5 {
+                envelopeLevel = target
+                envelopeStage = .release
+                envelopeTime = 0
+            }
+            return envelopeLevel
+
+        case .sustain:
+            // For drums, immediately go to release (sustain is just a level, not a hold)
+            envelopeStage = .release
+            envelopeTime = 0
+            return envelopeLevel
+
+        case .release:
+            // Release time: 0-500ms for hi-hats (tail after decay)
+            let releaseTime = max(0.001, params.release * 0.5)
             envelopeLevel *= expf(-dt / releaseTime)
             if envelopeLevel < 0.001 {
                 envelopeStage = .idle

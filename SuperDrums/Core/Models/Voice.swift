@@ -127,39 +127,47 @@ struct Voice: Identifiable, Codable, Equatable {
             bitcrush = 0.0
 
         case .closedHat:
-            // Tight, crisp closed hi-hat
-            pitch = 0.7
+            // TR-808 style metallic closed hi-hat
+            // Uses 6 square wave oscillators + resonant bandpass filter
+            // ALL controls have audible impact:
+            // - Pitch: Controls oscillator freq AND bandpass center (3-12kHz) - very noticeable!
+            // - Filter Cutoff: Highpass frequency (500Hz-5kHz) for brightness
+            // - Filter Resonance: Bandpass resonance for metallic "ring"
+            // - Tone Mix: Blend between metallic oscillators and noise shimmer
+            // - Decay: Envelope time (30-150ms range)
+            pitch = 0.5              // Mid pitch = ~7.5kHz bandpass center
             pitchEnvelopeAmount = 0.0
             pitchEnvelopeDecay = 0.05
-            toneMix = 0.95
-            filterType = .highpass
-            filterCutoff = 0.6
-            filterResonance = 0.15
+            toneMix = 0.25           // 25% noise for shimmer
+            filterType = .highpass   // Controls highpass for brightness
+            filterCutoff = 0.3       // ~1.85kHz highpass (lets through more body)
+            filterResonance = 0.3    // Moderate resonance for metallic ring
             filterEnvelopeAmount = 0.0
             attack = 0.001
             hold = 0.0
-            decay = 0.15
+            decay = 0.25             // ~60ms decay (30-150ms range)
             sustain = 0.0
             release = 0.02
-            drive = 0.0
+            drive = 0.1              // Some drive for presence
             bitcrush = 0.0
 
         case .openHat:
-            // Sustained open hi-hat with shimmer
-            pitch = 0.7
+            // TR-808 style metallic open hi-hat
+            // Same synthesis as closed but longer decay range (50-800ms)
+            pitch = 0.45             // Slightly lower pitch for open hat character
             pitchEnvelopeAmount = 0.0
             pitchEnvelopeDecay = 0.05
-            toneMix = 0.95
+            toneMix = 0.3            // More noise shimmer for sizzle
             filterType = .highpass
-            filterCutoff = 0.55
-            filterResonance = 0.2
+            filterCutoff = 0.25      // Darker than closed (~1.6kHz)
+            filterResonance = 0.35   // More resonance for ring
             filterEnvelopeAmount = 0.0
             attack = 0.001
             hold = 0.0
-            decay = 0.55
+            decay = 0.5              // ~425ms decay (50-800ms range)
             sustain = 0.0
             release = 0.1
-            drive = 0.0
+            drive = 0.1              // Drive for presence
             bitcrush = 0.0
 
         case .clap:
