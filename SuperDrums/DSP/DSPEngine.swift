@@ -219,7 +219,8 @@ final class DSPEngine {
                         velocity: step.normalizedVelocity,
                         probability: step.probability,
                         retriggerCount: step.retriggerCount,
-                        nudge: step.nudge
+                        nudge: step.nudge,
+                        parameterLocks: step.parameterLocks
                     )
                     voiceSteps.append(trigger)
                 }
@@ -359,7 +360,8 @@ final class DSPEngine {
 
                 if shouldOutput {
                     let volume = state.voiceVolumes[voiceIndex]
-                    let pan = state.voicePans[voiceIndex]
+                    // Use p-lock override for pan if available, otherwise use base value
+                    let pan = synths[voiceIndex].getPanOverride() ?? state.voicePans[voiceIndex]
 
                     // Simple equal-power pan law
                     let leftGain = volume * cosf((pan + 1.0) * .pi / 4.0)
@@ -372,14 +374,16 @@ final class DSPEngine {
                     rightSample += voiceRight
 
                     // Collect reverb send (post-fader)
-                    let reverbSend = state.voiceReverbSend[voiceIndex]
+                    // Use p-lock override if available, otherwise use base value
+                    let reverbSend = synths[voiceIndex].getReverbSendOverride() ?? state.voiceReverbSend[voiceIndex]
                     if reverbSend > 0.01 {
                         reverbSendL += voiceLeft * reverbSend
                         reverbSendR += voiceRight * reverbSend
                     }
 
                     // Collect delay send (post-fader)
-                    let delaySend = state.voiceDelaySend[voiceIndex]
+                    // Use p-lock override if available, otherwise use base value
+                    let delaySend = synths[voiceIndex].getDelaySendOverride() ?? state.voiceDelaySend[voiceIndex]
                     if delaySend > 0.01 {
                         delaySendL += voiceLeft * delaySend
                         delaySendR += voiceRight * delaySend
@@ -467,8 +471,8 @@ final class DSPEngine {
                 }
             }
 
-            // Trigger the voice
-            synths[voiceIndex].trigger(velocity: stepData.velocity)
+            // Trigger the voice with parameter locks
+            synths[voiceIndex].trigger(velocity: stepData.velocity, parameterLocks: stepData.parameterLocks)
 
             // Notify UI
             let voiceType = DrumVoiceType.allCases[voiceIndex]
@@ -566,6 +570,9 @@ private struct StepTriggerData: Sendable {
     let probability: Float
     let retriggerCount: Int
     let nudge: Float
+    /// Parameter locks for this step (parameter ID -> value)
+    /// Keys match LockableParameter.rawValue: "pitch", "decay", "filterCutoff", etc.
+    let parameterLocks: [String: Float]
 }
 
 // MARK: - Synth Parameters (Thread-Safe)
@@ -639,6 +646,12 @@ private final class DrumVoiceSynth: @unchecked Sendable {
     /// Flag indicating pending parameters are available
     private var hasPendingUpdate: Bool = false
 
+    // MARK: - Parameter Locks (Audio thread only)
+
+    /// Active parameter locks for current note (cleared on note end)
+    /// Keys match LockableParameter.rawValue: "pitch", "decay", "filterCutoff", etc.
+    private var currentParameterLocks: [String: Float] = [:]
+
     // MARK: - Envelope State (Audio thread only)
 
     private var isPlaying: Bool = false
@@ -696,6 +709,23 @@ private final class DrumVoiceSynth: @unchecked Sendable {
 
     /// Output level for metering (can be read from main thread)
     var currentLevel: Float = 0
+
+    // MARK: - Mixer P-Lock Getters
+
+    /// Get pan override from current p-locks, or nil if no override
+    func getPanOverride() -> Float? {
+        return currentParameterLocks["pan"]
+    }
+
+    /// Get reverb send override from current p-locks, or nil if no override
+    func getReverbSendOverride() -> Float? {
+        return currentParameterLocks["reverbSend"]
+    }
+
+    /// Get delay send override from current p-locks, or nil if no override
+    func getDelaySendOverride() -> Float? {
+        return currentParameterLocks["delaySend"]
+    }
 
     private enum EnvelopeStage {
         case idle, attack, hold, decay, sustain, release
@@ -884,9 +914,13 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         os_unfair_lock_unlock(&parameterLock)
     }
 
-    /// Trigger the voice
-    func trigger(velocity: Float) {
+    /// Trigger the voice with optional parameter locks
+    /// - Parameters:
+    ///   - velocity: Note velocity (0.0 - 1.0)
+    ///   - parameterLocks: Optional per-step parameter overrides
+    func trigger(velocity: Float, parameterLocks: [String: Float] = [:]) {
         self.velocity = velocity
+        self.currentParameterLocks = parameterLocks
         self.envelopeTime = 0
         self.totalPlayTime = 0
         self.envelopeStage = .attack
@@ -917,6 +951,36 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         }
     }
 
+    /// Get effective parameters with any P-locks applied
+    /// This merges base parameters with per-step parameter lock overrides
+    private func getEffectiveParameters() -> SynthParameters {
+        guard !currentParameterLocks.isEmpty else {
+            return activeParameters
+        }
+
+        var params = activeParameters
+
+        // Apply parameter locks
+        // Keys match LockableParameter.rawValue
+        if let pitch = currentParameterLocks["pitch"] {
+            params.basePitch = pitch
+        }
+        if let decay = currentParameterLocks["decay"] {
+            params.decay = decay
+        }
+        if let filterCutoff = currentParameterLocks["filterCutoff"] {
+            params.filterCutoff = filterCutoff
+        }
+        if let filterResonance = currentParameterLocks["filterResonance"] {
+            params.filterResonance = filterResonance
+        }
+        if let drive = currentParameterLocks["drive"] {
+            params.drive = drive
+        }
+
+        return params
+    }
+
     /// Render a single sample (called from audio thread)
     func renderSample(sampleRate: Float) -> Float {
         guard isPlaying else {
@@ -934,8 +998,8 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             return renderHiHatSample(sampleRate: sampleRate)
         }
 
-        // Use thread-safe active parameters
-        let params = activeParameters
+        // Use thread-safe active parameters with P-locks applied
+        let params = getEffectiveParameters()
         let dt = 1.0 / sampleRate
 
         // Calculate frequencies based on voice type
@@ -1028,7 +1092,7 @@ private final class DrumVoiceSynth: @unchecked Sendable {
     /// - Tone control mixes between the two oscillators
     /// - ToneMix (snappy) controls noise level
     private func renderSnareSample(sampleRate: Float) -> Float {
-        let params = activeParameters
+        let params = getEffectiveParameters()
         let dt = 1.0 / sampleRate
 
         // Overall amplitude envelope (controls final output)
@@ -1175,7 +1239,7 @@ private final class DrumVoiceSynth: @unchecked Sendable {
     /// - Decay: Envelope time (30-150ms for closed, 50-800ms for open)
     /// - Drive: Saturation for grit and presence
     private func renderHiHatSample(sampleRate: Float) -> Float {
-        let params = activeParameters
+        let params = getEffectiveParameters()
         let dt = 1.0 / sampleRate
 
         // === TR-808 OSCILLATOR FREQUENCIES ===
