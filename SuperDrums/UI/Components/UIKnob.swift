@@ -29,6 +29,9 @@ struct UIKnob: View {
     /// Tracks the drag state
     @State private var isDragging: Bool = false
 
+    /// Value at start of drag (for proper delta calculation)
+    @State private var dragStartValue: Float = 0
+
     var body: some View {
         VStack(spacing: UISpacing.xs) {
             // Knob
@@ -92,10 +95,15 @@ struct UIKnob: View {
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { gesture in
+                if !isDragging {
+                    // Store starting value when drag begins
+                    dragStartValue = value
+                }
                 isDragging = true
                 // Vertical drag: up increases, down decreases
+                // Use total translation from start, applied to start value
                 let delta = Float(-gesture.translation.height * sensitivity)
-                value = max(0, min(1, value + delta))
+                value = max(0, min(1, dragStartValue + delta))
             }
             .onEnded { _ in
                 isDragging = false
@@ -140,6 +148,7 @@ struct UIBipolarKnob: View {
 
     private let sensitivity: CGFloat = 0.005
     @State private var isDragging: Bool = false
+    @State private var dragStartValue: Float = 0
 
     var body: some View {
         VStack(spacing: UISpacing.xs) {
@@ -198,9 +207,14 @@ struct UIBipolarKnob: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
+                        if !isDragging {
+                            // Store starting value when drag begins
+                            dragStartValue = value
+                        }
                         isDragging = true
+                        // Use total translation from start, applied to start value
                         let delta = Float(-gesture.translation.height * sensitivity)
-                        value = max(-1, min(1, value + delta))
+                        value = max(-1, min(1, dragStartValue + delta))
                     }
                     .onEnded { _ in
                         isDragging = false
