@@ -7,6 +7,15 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
+                // Pattern bank panel (slides down from top)
+                if store.showPatternBank {
+                    UIPatternBank(
+                        store: store,
+                        isVisible: $store.showPatternBank
+                    )
+                    .transition(.move(edge: .top))
+                }
+
                 // Main content area
                 tabContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -14,6 +23,7 @@ struct ContentView: View {
                 // Tab bar
                 UITabBar(selectedTab: $store.selectedTab)
             }
+            .animation(.easeInOut(duration: 0.2), value: store.showPatternBank)
         }
         .background(UIColors.background)
         .preferredColorScheme(.dark)
@@ -58,6 +68,15 @@ struct AUv3ContentView: View {
             let isCompact = geometry.size.height < 500
 
             VStack(spacing: 0) {
+                // Pattern bank panel (slides down from top)
+                if store.showPatternBank {
+                    UIPatternBank(
+                        store: store,
+                        isVisible: $store.showPatternBank
+                    )
+                    .transition(.move(edge: .top))
+                }
+
                 // Compact mode shows simplified transport
                 if isCompact {
                     compactTransport
@@ -70,6 +89,7 @@ struct AUv3ContentView: View {
                 // Tab bar (always shown)
                 UITabBar(selectedTab: $store.selectedTab)
             }
+            .animation(.easeInOut(duration: 0.2), value: store.showPatternBank)
         }
         .background(UIColors.background)
         .preferredColorScheme(.dark)

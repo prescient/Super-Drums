@@ -330,19 +330,21 @@ final class DSPEngine {
             var delaySendR: Float = 0
 
             for (voiceIndex, synth) in synths.enumerated() {
-                // Check mute/solo
+                // Always render the synth to advance envelope/phase state
+                // This ensures muted/non-soloed voices don't "build up" pending triggers
+                let sample = synth.renderSample(sampleRate: Float(sampleRate))
+
+                // Skip this voice if it produced invalid output
+                guard sample.isFinite else { continue }
+
+                // Check mute/solo to determine if we should output this voice
                 let isMuted = state.voiceMuted[voiceIndex]
                 let isSoloed = state.voiceSoloed[voiceIndex]
                 let anySoloed = state.anySoloed
 
-                let shouldPlay = !isMuted && (!anySoloed || isSoloed)
+                let shouldOutput = !isMuted && (!anySoloed || isSoloed)
 
-                if shouldPlay {
-                    let sample = synth.renderSample(sampleRate: Float(sampleRate))
-
-                    // Skip this voice if it produced invalid output
-                    guard sample.isFinite else { continue }
-
+                if shouldOutput {
                     let volume = state.voiceVolumes[voiceIndex]
                     let pan = state.voicePans[voiceIndex]
 

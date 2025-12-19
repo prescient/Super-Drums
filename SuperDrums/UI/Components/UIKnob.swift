@@ -20,6 +20,9 @@ struct UIKnob: View {
     /// Value formatter
     var valueFormatter: (Float) -> String = { String(format: "%.0f", $0 * 100) }
 
+    /// Default value to reset to on double-tap
+    var defaultValue: Float = 0.5
+
     /// Sensitivity of the drag gesture
     private let sensitivity: CGFloat = 0.005
 
@@ -68,6 +71,14 @@ struct UIKnob: View {
             }
             .frame(width: size, height: size)
             .contentShape(Circle())
+            .highPriorityGesture(
+                TapGesture(count: 2)
+                    .onEnded {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            value = defaultValue
+                        }
+                    }
+            )
             .gesture(dragGesture)
             .hoverEffect()
 
@@ -125,6 +136,7 @@ struct UIBipolarKnob: View {
     var label: String
     var accentColor: Color = UIColors.accentCyan
     var size: CGFloat = UISizes.knobMedium
+    var defaultValue: Float = 0.0
 
     private let sensitivity: CGFloat = 0.005
     @State private var isDragging: Bool = false
@@ -175,6 +187,14 @@ struct UIBipolarKnob: View {
             }
             .frame(width: size, height: size)
             .contentShape(Circle())
+            .highPriorityGesture(
+                TapGesture(count: 2)
+                    .onEnded {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            value = defaultValue
+                        }
+                    }
+            )
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in

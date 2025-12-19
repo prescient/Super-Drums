@@ -39,6 +39,7 @@
 		F0000001030 /* SongArrangementEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002030 /* SongArrangementEntry.swift */; };
 		F0000001031 /* UISongArrangementEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002031 /* UISongArrangementEditor.swift */; };
 		F0000001032 /* UISlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002032 /* UISlider.swift */; };
+		F0000001033 /* UIPatternBank.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002033 /* UIPatternBank.swift */; };
 		F0000001100 /* PatternTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002100 /* PatternTests.swift */; };
 		F0000001101 /* TrackRandomizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002101 /* TrackRandomizationTests.swift */; };
 		F0000001102 /* SongArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000002102 /* SongArrangementTests.swift */; };
@@ -88,6 +89,7 @@
 		F0000002030 /* SongArrangementEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongArrangementEntry.swift; sourceTree = "<group>"; };
 		F0000002031 /* UISongArrangementEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISongArrangementEditor.swift; sourceTree = "<group>"; };
 		F0000002032 /* UISlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UISlider.swift; sourceTree = "<group>"; };
+		F0000002033 /* UIPatternBank.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIPatternBank.swift; sourceTree = "<group>"; };
 		F0000002100 /* PatternTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternTests.swift; sourceTree = "<group>"; };
 		F0000002101 /* TrackRandomizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRandomizationTests.swift; sourceTree = "<group>"; };
 		F0000002102 /* SongArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongArrangementTests.swift; sourceTree = "<group>"; };
@@ -193,6 +195,7 @@
 				F0000002014 /* UIPadButton.swift */,
 				F0000002015 /* UITabBar.swift */,
 				F0000002032 /* UISlider.swift */,
+				F0000002033 /* UIPatternBank.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -403,6 +406,7 @@
 				F0000001014 /* UIPadButton.swift in Sources */,
 				F0000001015 /* UITabBar.swift in Sources */,
 				F0000001032 /* UISlider.swift in Sources */,
+				F0000001033 /* UIPatternBank.swift in Sources */,
 				F0000001016 /* UISequencerView.swift in Sources */,
 				F0000001017 /* UISequencerTrackRow.swift in Sources */,
 				F0000001018 /* UISequencerStepCell.swift in Sources */,

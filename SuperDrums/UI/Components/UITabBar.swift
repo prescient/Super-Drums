@@ -84,6 +84,18 @@ struct UITransportBar: View {
     var patternLength: Int = 16
     var onPlayToggle: () -> Void
 
+    // Pattern navigation
+    var currentPatternIndex: Int = 0
+    var patternCount: Int = 1
+    var patternName: String = "Pattern 1"
+    var onPreviousPattern: (() -> Void)?
+    var onNextPattern: (() -> Void)?
+    var onAddPattern: (() -> Void)?
+    var onSelectPattern: ((Int) -> Void)?
+
+    // Pattern bank toggle
+    @Binding var showPatternBank: Bool
+
     var body: some View {
         HStack(spacing: UISpacing.lg) {
             // Play/Stop
@@ -135,14 +147,106 @@ struct UITransportBar: View {
 
             Spacer()
 
-            // Pattern selector placeholder
-            HStack(spacing: UISpacing.xs) {
-                Text("Pattern")
-                    .labelStyle()
+            // Pattern bank toggle
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showPatternBank.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.4x3.fill")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("BANK")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                }
+                .foregroundStyle(showPatternBank ? UIColors.accentMagenta : UIColors.textSecondary)
+                .padding(.horizontal, UISpacing.md)
+                .padding(.vertical, UISpacing.sm)
+                .background(showPatternBank ? UIColors.accentMagenta.opacity(0.15) : UIColors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(showPatternBank ? UIColors.accentMagenta : UIColors.border, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .neonGlow(color: UIColors.accentMagenta, radius: 4, isActive: showPatternBank)
 
-                Text("01")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundStyle(UIColors.accentCyan)
+            // Pattern selector
+            HStack(spacing: UISpacing.xs) {
+                // Previous pattern
+                Button {
+                    onPreviousPattern?()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(currentPatternIndex > 0 ? UIColors.textPrimary : UIColors.textSecondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .disabled(currentPatternIndex <= 0)
+
+                // Pattern number and name
+                Menu {
+                    ForEach(0..<patternCount, id: \.self) { index in
+                        Button {
+                            onSelectPattern?(index)
+                        } label: {
+                            HStack {
+                                Text(String(format: "%02d", index + 1))
+                                if index == currentPatternIndex {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    Button {
+                        onAddPattern?()
+                    } label: {
+                        Label("Add Pattern", systemImage: "plus")
+                    }
+                } label: {
+                    HStack(spacing: UISpacing.xs) {
+                        Text(String(format: "%02d", currentPatternIndex + 1))
+                            .font(.system(size: 18, weight: .bold, design: .monospaced))
+                            .foregroundStyle(UIColors.accentCyan)
+
+                        Text("/")
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                            .foregroundStyle(UIColors.textSecondary)
+
+                        Text(String(format: "%02d", patternCount))
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                            .foregroundStyle(UIColors.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                // Next pattern
+                Button {
+                    onNextPattern?()
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(currentPatternIndex < patternCount - 1 ? UIColors.textPrimary : UIColors.textSecondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .disabled(currentPatternIndex >= patternCount - 1)
+
+                // Add pattern button
+                Button {
+                    onAddPattern?()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(UIColors.accentGreen)
+                        .frame(width: 24, height: 24)
+                        .background(UIColors.elevated)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, UISpacing.md)
             .padding(.vertical, UISpacing.sm)
@@ -165,7 +269,8 @@ struct UITransportBar: View {
             isPlaying: true,
             bpm: .constant(120.0),
             currentStep: 4,
-            onPlayToggle: {}
+            onPlayToggle: {},
+            showPatternBank: .constant(false)
         )
 
         UITabBar(selectedTab: .constant(.sequencer))

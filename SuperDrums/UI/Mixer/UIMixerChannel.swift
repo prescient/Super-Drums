@@ -43,7 +43,8 @@ struct UIMixerChannel: View {
                 ),
                 label: "Pan",
                 accentColor: voiceType.color,
-                size: UISizes.knobSmall
+                size: UISizes.knobSmall,
+                defaultValue: 0.0
             )
 
             // Send knobs
@@ -57,7 +58,8 @@ struct UIMixerChannel: View {
                     label: "Rev",
                     accentColor: UIColors.accentMagenta,
                     size: 32,
-                    showValue: false
+                    showValue: false,
+                    defaultValue: 0.0
                 )
 
                 // Delay send
@@ -69,7 +71,8 @@ struct UIMixerChannel: View {
                     label: "Dly",
                     accentColor: UIColors.accentOrange,
                     size: 32,
-                    showValue: false
+                    showValue: false,
+                    defaultValue: 0.0
                 )
             }
 
@@ -80,7 +83,8 @@ struct UIMixerChannel: View {
                     set: { store.setVolume($0, for: voiceType) }
                 ),
                 accentColor: voiceType.color,
-                height: 140
+                height: 140,
+                defaultValue: 0.8
             )
 
             // Volume value

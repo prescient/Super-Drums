@@ -44,7 +44,28 @@ struct UISequencerView: View {
                         bpm: $store.bpm,
                         currentStep: store.currentStep,
                         patternLength: store.currentPattern.defaultStepCount,
-                        onPlayToggle: { store.togglePlayback() }
+                        onPlayToggle: { store.togglePlayback() },
+                        currentPatternIndex: store.project.currentPatternIndex,
+                        patternCount: store.project.patterns.count,
+                        patternName: store.currentPattern.name,
+                        onPreviousPattern: {
+                            if store.project.currentPatternIndex > 0 {
+                                store.selectPattern(store.project.currentPatternIndex - 1)
+                            }
+                        },
+                        onNextPattern: {
+                            if store.project.currentPatternIndex < store.project.patterns.count - 1 {
+                                store.selectPattern(store.project.currentPatternIndex + 1)
+                            }
+                        },
+                        onAddPattern: {
+                            store.addPattern()
+                            store.selectPattern(store.project.patterns.count - 1)
+                        },
+                        onSelectPattern: { index in
+                            store.selectPattern(index)
+                        },
+                        showPatternBank: $store.showPatternBank
                     )
                     .frame(height: transportHeight)
 

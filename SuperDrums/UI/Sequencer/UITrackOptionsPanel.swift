@@ -124,8 +124,19 @@ struct UITrackOptionsPanel: View {
                 // Euclidean Mode
                 VStack(alignment: .leading, spacing: UISpacing.xs) {
                     Toggle(isOn: $settings.useEuclidean) {
-                        Text("Euclidean Mode")
-                            .labelStyle()
+                        HStack {
+                            Text("Euclidean Mode")
+                                .labelStyle()
+                            if settings.useEuclidean {
+                                Text("\(settings.euclideanHits)/16")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(voiceType.color)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(voiceType.color.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                        }
                     }
                     .tint(voiceType.color)
 
@@ -134,8 +145,12 @@ struct UITrackOptionsPanel: View {
                             Text("Hits")
                                 .labelStyle()
                             Spacer()
+                            Text("\(settings.euclideanHits)")
+                                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                .foregroundStyle(voiceType.color)
+                                .frame(width: 32)
                             Stepper(
-                                "\(settings.euclideanHits)",
+                                "",
                                 value: $settings.euclideanHits,
                                 in: 1...16
                             )

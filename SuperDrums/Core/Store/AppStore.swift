@@ -54,6 +54,14 @@ final class AppStore {
     /// Show song arrangement editor
     var showSongArrangement: Bool = false
 
+    /// Show pattern bank
+    var showPatternBank: Bool = false
+
+    // MARK: - Pattern Clipboard
+
+    /// Copied pattern for paste operations
+    var copiedPattern: Pattern?
+
     // MARK: - Song Mode State
 
     /// Whether playback is in song mode (vs pattern mode)
@@ -422,6 +430,43 @@ final class AppStore {
     /// Deletes pattern at index
     func deletePattern(at index: Int) {
         project.deletePattern(at: index)
+    }
+
+    /// Copies pattern at index to clipboard
+    func copyPattern(at index: Int) {
+        guard index < project.patterns.count else { return }
+        copiedPattern = project.patterns[index]
+    }
+
+    /// Copies current pattern to clipboard
+    func copyCurrentPattern() {
+        copiedPattern = currentPattern
+    }
+
+    /// Pastes clipboard pattern to specified index
+    func pastePattern(to index: Int) {
+        guard let pattern = copiedPattern, index < project.patterns.count else { return }
+        let pastedPattern = pattern.duplicate(newName: "Pattern \(index + 1)")
+        project.patterns[index] = pastedPattern
+        if index == project.currentPatternIndex {
+            syncPatternToDSP()
+        }
+    }
+
+    /// Clears pattern at index (resets to empty)
+    func clearPattern(at index: Int) {
+        guard index < project.patterns.count else { return }
+        project.patterns[index] = Pattern(name: "Pattern \(index + 1)")
+        if index == project.currentPatternIndex {
+            syncPatternToDSP()
+        }
+    }
+
+    /// Ensures project has at least 32 patterns
+    func ensurePatternCount(_ count: Int) {
+        while project.patterns.count < count {
+            project.addPattern()
+        }
     }
 
     // MARK: - Randomization

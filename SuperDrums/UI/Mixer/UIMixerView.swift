@@ -87,7 +87,8 @@ struct UIMixerView: View {
                 label: "",
                 accentColor: UIColors.accentCyan,
                 width: 50,
-                height: 180
+                height: 180,
+                defaultValue: 0.8
             )
 
             // VU meter showing actual output level
@@ -113,7 +114,8 @@ struct UIMixerView: View {
                     value: $store.reverbMix,
                     label: "Mix",
                     accentColor: UIColors.accentMagenta,
-                    size: UISizes.knobSmall
+                    size: UISizes.knobSmall,
+                    defaultValue: 0.3
                 )
             }
 
@@ -127,21 +129,24 @@ struct UIMixerView: View {
                         value: $store.delayMix,
                         label: "Mix",
                         accentColor: UIColors.accentOrange,
-                        size: UISizes.knobSmall
+                        size: UISizes.knobSmall,
+                        defaultValue: 0.2
                     )
 
                     UIKnob(
                         value: $store.delayTime,
                         label: "Time",
                         accentColor: UIColors.accentOrange,
-                        size: UISizes.knobSmall
+                        size: UISizes.knobSmall,
+                        defaultValue: 0.5
                     )
 
                     UIKnob(
                         value: $store.delayFeedback,
                         label: "Feedback",
                         accentColor: UIColors.accentOrange,
-                        size: UISizes.knobSmall
+                        size: UISizes.knobSmall,
+                        defaultValue: 0.4
                     )
                 }
             }
@@ -162,7 +167,8 @@ struct UIMixerView: View {
                         label: "Threshold",
                         accentColor: UIColors.accentGreen,
                         size: UISizes.knobSmall,
-                        valueFormatter: { String(format: "%.0fdB", ($0 * 40) - 40) }
+                        valueFormatter: { String(format: "%.0fdB", ($0 * 40) - 40) },
+                        defaultValue: 0.75  // -10dB
                     )
 
                     UIKnob(
@@ -173,7 +179,8 @@ struct UIMixerView: View {
                         label: "Ratio",
                         accentColor: UIColors.accentGreen,
                         size: UISizes.knobSmall,
-                        valueFormatter: { String(format: "%.1f:1", ($0 * 19) + 1) }
+                        valueFormatter: { String(format: "%.1f:1", ($0 * 19) + 1) },
+                        defaultValue: 0.158  // 4:1
                     )
                 }
             }

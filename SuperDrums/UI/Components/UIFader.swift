@@ -20,6 +20,9 @@ struct UIFader: View {
     /// Whether to show dB scale
     var showScale: Bool = true
 
+    /// Default value to reset to on double-tap
+    var defaultValue: Float = 0.8
+
     @State private var isDragging: Bool = false
 
     var body: some View {
@@ -72,6 +75,14 @@ struct UIFader: View {
                 }
                 .frame(width: width - (showScale ? 32 : 0), height: height)
                 .contentShape(Rectangle())
+                .highPriorityGesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                value = defaultValue
+                            }
+                        }
+                )
                 .gesture(faderGesture)
                 .hoverEffect()
             }
@@ -128,6 +139,7 @@ struct UICompactFader: View {
     @Binding var value: Float
     var accentColor: Color = UIColors.accentCyan
     var height: CGFloat = 120
+    var defaultValue: Float = 0.8
 
     @State private var isDragging: Bool = false
 
@@ -152,6 +164,14 @@ struct UICompactFader: View {
         }
         .frame(width: 24, height: height)
         .contentShape(Rectangle())
+        .highPriorityGesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        value = defaultValue
+                    }
+                }
+        )
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { gesture in
