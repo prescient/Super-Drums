@@ -574,26 +574,26 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             params.drive = 0.1
 
         case .snare:
-            // TR-808/909 style snare defaults
-            // basePitch: 0.5 = 180Hz/330Hz body frequencies (0=126Hz/231Hz, 1=234Hz/429Hz)
+            // TR-808 style snare defaults
+            // basePitch: 0.5 = ~238Hz/476Hz oscillators (octave apart)
             params.basePitch = 0.5
-            // Pitch envelope: subtle sweep for attack "thwack"
-            params.pitchEnvAmount = 0.25
+            // Pitch envelope: minimal for TR-808 style (bridged-T doesn't pitch sweep much)
+            params.pitchEnvAmount = 0.0
             params.pitchEnvDecay = 0.1
-            // toneMix: 0.5 = balanced body/snare wires (0=all body, 1=all wires)
-            params.toneMix = 0.5
-            // Filter: lowpass to shape overall tone
+            // toneMix: "Snappy" control - 0.6 = good balance of body and snare wires
+            params.toneMix = 0.6
+            // filterCutoff: "Tone" control - mix between low/high oscillators
             params.filterType = 0
-            params.filterCutoff = 0.9
-            params.filterEnvAmount = 0.15
-            params.filterResonance = 0.1
-            // Envelope: fast attack, medium decay for snare character
+            params.filterCutoff = 0.5  // Balanced tone between oscillators
+            params.filterEnvAmount = 0.0
+            params.filterResonance = 0.0
+            // Envelope: fast attack, medium decay
             params.attack = 0.001
-            params.decay = 0.4
+            params.decay = 0.5  // Controls oscillator and noise decay
             params.sustain = 0.0
-            params.release = 0.08
-            // Light drive for analog warmth
-            params.drive = 0.12
+            params.release = 0.05
+            // Subtle drive for analog warmth
+            params.drive = 0.08
 
         case .closedHat:
             params.basePitch = 0.7
@@ -842,14 +842,17 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         return output
     }
 
-    // MARK: - Snare Drum Synthesis (TR-808/909 Style)
+    // MARK: - Snare Drum Synthesis (TR-808 Style)
 
-    /// Specialized snare drum rendering using dual-oscillator body + bandpass filtered noise
-    /// Based on TR-808/909 snare synthesis architecture:
-    /// - Two sine oscillators at ~180Hz and ~330Hz (drum body modes)
-    /// - Separate envelopes for each body oscillator (low freq decays slower)
-    /// - Bandpass filtered white noise for snare wire simulation
-    /// - toneMix controls body vs snare wire balance
+    /// TR-808 snare drum synthesis using bridged-T oscillator modeling.
+    /// Reference: https://www.n8synth.co.uk/diy-eurorack/eurorack-808-snare/
+    ///
+    /// Architecture:
+    /// - Two bridged-T oscillators at ~250Hz and ~500Hz (octave apart)
+    /// - Bridged-T oscillators are self-damping (like high-Q resonant filters hit with a pulse)
+    /// - Low-pass filtered white noise for snare wire simulation
+    /// - Tone control mixes between the two oscillators
+    /// - ToneMix (snappy) controls noise level
     private func renderSnareSample(sampleRate: Float) -> Float {
         let params = activeParameters
         let dt = 1.0 / sampleRate
@@ -864,87 +867,83 @@ private final class DrumVoiceSynth: @unchecked Sendable {
             return 0
         }
 
-        // === SNARE BODY (Dual Oscillator) ===
+        // === TR-808 BRIDGED-T OSCILLATORS ===
+        // Two oscillators tuned approximately an octave apart
+        // Original TR-808: ~250Hz (lower) and ~500Hz (upper)
+        // The pitch parameter tunes both proportionally
 
-        // Base frequencies for snare body - TR-808/909 style
-        // The pitch parameter modulates these proportionally
-        let pitchMod = 0.7 + params.basePitch * 0.6  // 0.7 - 1.3 multiplier
-        let freq1: Float = 180.0 * pitchMod  // Low body mode (~180Hz)
-        let freq2: Float = 330.0 * pitchMod  // High body mode (~330Hz, non-harmonic)
+        let pitchMod = 0.8 + params.basePitch * 0.4  // 0.8 - 1.2 multiplier
+        let freq1: Float = 238.0 * pitchMod  // Lower bridged-T (~238Hz nominal)
+        let freq2: Float = 476.0 * pitchMod  // Upper bridged-T (~476Hz, octave above)
 
-        // Pitch envelope for initial "thwack" - fast pitch drop on attack
-        let pitchEnvTime = max(0.005, params.pitchEnvDecay * 0.15)  // Faster for snare
-        let pitchEnv = expf(-totalPlayTime / pitchEnvTime)
-        let pitchSweep = 1.0 + params.pitchEnvAmount * pitchEnv * 2.0  // Less extreme than kick
+        // Bridged-T oscillators are self-damping - they naturally decay
+        // Model as decaying sine waves with exponential amplitude decay
+        // The decay time is intrinsic to the bridged-T circuit (set by RC components)
 
-        // Apply pitch envelope to both oscillators
-        let actualFreq1 = freq1 * pitchSweep
-        let actualFreq2 = freq2 * pitchSweep
+        // Base decay time for bridged-T oscillators (typically 50-200ms)
+        let oscillatorDecay = 0.05 + params.decay * 0.15  // 50-200ms
 
-        // Separate envelope decay for each body oscillator
-        // Low frequency (180Hz): Longer decay - provides body/weight
-        // High frequency (330Hz): Shorter decay - provides attack/snap (0,1 mode decays 2x faster)
-        let bodyDecayBase = max(0.02, params.decay * 0.4)  // 20-400ms range for snare body
-        let lowDecayTime = bodyDecayBase * 1.2   // Low mode: slightly longer
-        let highDecayTime = bodyDecayBase * 0.6  // High mode: faster decay (2x ratio)
+        // Lower oscillator has slightly longer decay (more body/sustain)
+        let decay1 = oscillatorDecay * 1.1
+        // Upper oscillator decays faster (more attack/snap)
+        let decay2 = oscillatorDecay * 0.8
 
-        snareBodyEnvLow *= expf(-dt / lowDecayTime)
-        snareBodyEnvHigh *= expf(-dt / highDecayTime)
+        // Self-damping envelope for each oscillator
+        snareBodyEnvLow *= expf(-dt / decay1)
+        snareBodyEnvHigh *= expf(-dt / decay2)
 
-        // Generate body oscillators (sine waves)
-        let body1 = sinf(phase * 2.0 * .pi) * snareBodyEnvLow
-        let body2 = sinf(snarePhase2 * 2.0 * .pi) * snareBodyEnvHigh * 0.7  // High mode slightly quieter
+        // Generate oscillators (bridged-T produces mostly sine waves)
+        let osc1 = sinf(phase * 2.0 * .pi) * snareBodyEnvLow
+        let osc2 = sinf(snarePhase2 * 2.0 * .pi) * snareBodyEnvHigh
 
-        // Mix body oscillators
-        let bodyMix = (body1 + body2) * 0.6
+        // Tone control: mix between lower and upper oscillator
+        // filterCutoff repurposed as "Tone" - 0 = more low osc, 1 = more high osc
+        let toneMix = params.filterCutoff
+        let oscMix = osc1 * (1.0 - toneMix * 0.5) + osc2 * (0.5 + toneMix * 0.5)
 
-        // === SNARE WIRES (Bandpass Filtered Noise) ===
+        // === INITIAL TRANSIENT (CLICK) ===
+        // TR-808 has a sharp transient at the attack from the trigger pulse
+        // Model as a very short exponential decay (~2ms)
+        let clickDecay: Float = 0.002  // 2ms click
+        let clickEnv = expf(-totalPlayTime / clickDecay)
+        let click = clickEnv * 0.3  // Subtle click mixed in
 
-        // Generate white noise
+        // === SNARE WIRES (LOW-PASS FILTERED NOISE) ===
+        // TR-808 uses low-pass filtered white noise, NOT bandpass
+        // The noise is generated by avalanche noise from a reverse-biased transistor
+
         let noise = Float.random(in: -1...1)
 
-        // Bandpass filter for snare wire character (centered around 4kHz)
-        // Snare wires have energy mainly in the 3-5kHz range
-        let snareWireCenterFreq: Float = 4000.0 + params.basePitch * 2000.0  // 4-6kHz
-        let snareWireQ: Float = 1.5 + params.filterResonance * 2.0  // Moderate Q
+        // Low-pass filter the noise (TR-808 uses passive LP filter on noise)
+        // Cutoff around 5-8kHz gives the characteristic snare wire sound
+        let noiseCutoff: Float = 5000.0 + params.basePitch * 3000.0  // 5-8kHz
+        let noiseNormFreq = min(noiseCutoff, sampleRate * 0.45) / sampleRate
+        let noiseF = 2.0 * sinf(.pi * noiseNormFreq)
 
-        // State-variable filter for bandpass (Chamberlin form)
-        let normalizedFreq = min(snareWireCenterFreq, sampleRate * 0.4) / sampleRate
-        let f = 2.0 * sinf(.pi * normalizedFreq)
-        let damping = 1.0 / snareWireQ
-
-        snareNoiseBpLow = snareNoiseBpLow + f * snareNoiseBpBand
-        let snareNoiseBpHigh = noise - snareNoiseBpLow - damping * snareNoiseBpBand
-        snareNoiseBpBand = f * snareNoiseBpHigh + snareNoiseBpBand
+        // Simple one-pole lowpass for noise (smoother than SVF for this purpose)
+        snareNoiseBpLow = snareNoiseBpLow + noiseF * (noise - snareNoiseBpLow)
 
         // Prevent filter instability
         if !snareNoiseBpLow.isFinite { snareNoiseBpLow = 0 }
-        if !snareNoiseBpBand.isFinite { snareNoiseBpBand = 0 }
 
-        // Snare wire envelope (slightly longer than body for "rattle" effect)
-        let snareWireDecay = max(0.03, params.decay * 0.5)  // 30-500ms
-        let snareWireEnv = expf(-totalPlayTime / snareWireDecay)
+        // Snappy envelope for noise (controlled by toneMix parameter)
+        // TR-808 "Snappy" control adjusts noise envelope amount
+        let snappyDecay = 0.03 + params.decay * 0.2  // 30-230ms noise decay
+        let snappyEnv = expf(-totalPlayTime / snappyDecay)
 
-        // Use bandpass output for snare wires
-        let snareWires = snareNoiseBpBand * snareWireEnv * 1.2
+        // toneMix controls "snappy" (noise) amount: 0 = no snare wires, 1 = full snare wires
+        let snappyAmount = params.toneMix
+        let snareNoise = snareNoiseBpLow * snappyEnv * snappyAmount * 1.5
 
-        // === MIX BODY AND SNARE WIRES ===
-
-        // toneMix: 0 = all body, 1 = all snare wires
-        // Classic snare is usually 40-60% noise
-        let bodyAmount = 1.0 - params.toneMix
-        let snareAmount = params.toneMix
-
-        var output = bodyMix * bodyAmount + snareWires * snareAmount
+        // === MIX ALL COMPONENTS ===
+        // Oscillators + click + noise
+        var output = (oscMix + click) * (1.0 - snappyAmount * 0.3) + snareNoise
 
         // === POST-PROCESSING ===
 
-        // Apply main filter (user-controllable tone shaping)
-        output = processFilter(input: output, sampleRate: sampleRate, envLevel: ampEnv, params: params)
-
-        // Apply drive/saturation for grit
+        // Apply drive/saturation for analog warmth
         if params.drive > 0.01 {
-            let driveAmount = 1.0 + params.drive * 8.0
+            let driveAmount = 1.0 + params.drive * 6.0
             output = tanhf(output * driveAmount) / tanhf(driveAmount)
         }
 
@@ -957,10 +956,10 @@ private final class DrumVoiceSynth: @unchecked Sendable {
         output *= ampEnv * velocity
 
         // Update oscillator phases
-        phase += actualFreq1 / sampleRate
+        phase += freq1 / sampleRate
         if phase >= 1.0 { phase -= 1.0 }
 
-        snarePhase2 += actualFreq2 / sampleRate
+        snarePhase2 += freq2 / sampleRate
         if snarePhase2 >= 1.0 { snarePhase2 -= 1.0 }
 
         // Update envelope times
